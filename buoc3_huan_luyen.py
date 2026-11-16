@@ -1,6 +1,8 @@
 """
 =====================================================================
- BƯỚC 3 – HUẤN LUYỆN MÔ HÌNH                              (Thành viên 2)
+ BƯỚC 3 – HUẤN LUYỆN MÔ HÌNH
+ Phụ trách: 3.1 – 3.2 (PCA)         Thành viên 1 – Bùi Trung Hiếu
+            3.3 – 3.5 (7 mô hình)   Thành viên 2 – Nguyễn Văn Lâm
 =====================================================================
  Làm gì   : Giảm chiều ảnh bằng PCA rồi huấn luyện 7 mô hình của học phần,
             mỗi mô hình tự chọn tham số tốt nhất bằng cross-validation 5-fold
@@ -28,6 +30,7 @@ import tempfile
 import numpy as np
 import pandas as pd
 import joblib                                                   # lưu / nạp mô hình ra file
+import seaborn as sns                                           # vẽ bản đồ nhiệt (heatmap)
 from sklearn.preprocessing import StandardScaler                # chuẩn hóa z = (x - mean) / std
 from sklearn.decomposition import PCA                           # phân tích thành phần chính
 from sklearn.pipeline import Pipeline                           # ghép nhiều khâu thành 1 mô hình
@@ -42,13 +45,9 @@ from chung import plt
 
 GIU_PHUONG_SAI = 0.95      # PCA giữ 95% phương sai
 SO_FOLD = 5                # cross-validation 5-fold
-try:
-    import seaborn as sns  # vẽ bản đồ nhiệt (heatmap)
-except ImportError:
-    sns = None
 
 
-# ======================= 3.2 PHÂN TÍCH PCA =======================
+# ============ 3.2 PHÂN TÍCH PCA  (Thành viên 1 – Bùi Trung Hiếu) ============
 def phan_tich_pca(X_train, y_train):
     """Làm PCA đầy đủ trên tập train để chọn k và vẽ hình minh họa."""
     scaler = StandardScaler().fit(X_train)          # fit: tính mean, std từng pixel (tập train)
@@ -88,26 +87,22 @@ def phan_tich_pca(X_train, y_train):
     plt.suptitle("Eigenfaces: các vector riêng của tập khuôn mặt")
     C.luu_hinh("3_eigenfaces.png")
 
-    # (c) Trước / sau PCA (như slide PCA): 2 pixel gốc vs 2 thành phần chính đầu
+    # (c) Trước / sau PCA (giống code slide PCA): 2 pixel gốc vs 2 thành phần chính đầu
     Z = pca.transform(Xs)
-    nguoi = sorted(set(y_train))
-    mau = C.mau_lop(len(nguoi))
+    so = pd.factorize(y_train)[0]                                   # tên người -> mã số 0, 1, 2…
     p1, p2 = 46 * C.KICH_THUOC + 34, 46 * C.KICH_THUOC + 66          # 2 pixel ở vùng mắt
-    fig, ax = plt.subplots(1, 2, figsize=(13, 5))
-    for i, n in enumerate(nguoi):
-        c = y_train == n
-        ax[0].scatter(Xs[c, p1], Xs[c, p2], color=mau[i], s=12, edgecolor="k", lw=0.2)
-        ax[1].scatter(Z[c, 0], Z[c, 1], color=mau[i], s=12, edgecolor="k", lw=0.2,
-                      label=C.rut_gon(n))
-    ax[0].set(title="Trước PCA: 2 pixel gốc (đã chuẩn hóa)",
-              xlabel="Pixel mắt trái", ylabel="Pixel mắt phải")
-    ax[1].set(title="Sau PCA: chiếu lên PC1, PC2",
-              xlabel="Principal Component 1", ylabel="Principal Component 2")
-    if len(nguoi) <= 12:
-        ax[1].legend(fontsize=7, markerscale=1.5)
-    else:                                                       # nhiều người: chú thích ra ngoài
-        ax[1].legend(fontsize=6, markerscale=1.2, loc="upper left", bbox_to_anchor=(1.01, 1),
-                     ncol=int(np.ceil(len(nguoi) / 25)))
+    plt.figure(figsize=(12, 5))
+    plt.subplot(1, 2, 1)
+    plt.scatter(Xs[:, p1], Xs[:, p2], c=so, cmap="tab20", edgecolor="k", s=15)
+    plt.xlabel("Pixel mắt trái")
+    plt.ylabel("Pixel mắt phải")
+    plt.title("Trước PCA: 2 pixel gốc (đã chuẩn hóa)")
+    plt.subplot(1, 2, 2)
+    plt.scatter(Z[:, 0], Z[:, 1], c=so, cmap="tab20", edgecolor="k", s=15)
+    plt.xlabel("Principal Component 1")
+    plt.ylabel("Principal Component 2")
+    plt.title("Sau PCA: chiếu lên PC1, PC2")
+    plt.colorbar(label="Người (mã số)")
     C.luu_hinh("3_truoc_sau_pca.png")
 
     # (d) Khôi phục ảnh từ m thành phần: x ≈ mean + z_1*PC1 + ... + z_m*PCm
@@ -126,54 +121,64 @@ def phan_tich_pca(X_train, y_train):
     return k
 
 
-# ======================= 3.3 TẠO 7 MÔ HÌNH =======================
+# ============ 3.3 TẠO 7 MÔ HÌNH  (Thành viên 2 – Nguyễn Văn Lâm) ============
 def tao_mo_hinh(k, bo_nho):
-    """Mỗi mô hình = Pipeline [StandardScaler -> PCA(k) -> bộ phân lớp] + lưới tham số để thử.
-    Pipeline bảo đảm StandardScaler và PCA chỉ học từ dữ liệu train."""
-    def ong(bo_phan_lop):
-        return Pipeline([("chuan_hoa", StandardScaler()),
-                         ("pca", PCA(n_components=k, random_state=C.RANDOM_STATE)),
-                         ("model", bo_phan_lop)],
-                        memory=bo_nho)          # nhớ kết quả PCA, các mô hình sau không tính lại
+    """Trả về 7 mô hình dạng {tên: (Pipeline, lưới tham số cần thử)}.
+    Mỗi Pipeline = StandardScaler -> PCA(k) -> bộ phân lớp. Pipeline bảo đảm StandardScaler
+    và PCA chỉ học từ dữ liệu train (của từng fold khi cross-validation)."""
+    def tao_pipeline(bo_phan_lop):
+        return Pipeline([
+            ("chuan_hoa", StandardScaler()),                            # khâu 1: chuẩn hóa
+            ("pca", PCA(n_components=k, random_state=C.RANDOM_STATE)),  # khâu 2: giảm chiều
+            ("model", bo_phan_lop),                                     # khâu 3: phân lớp
+        ], memory=bo_nho)          # nhớ kết quả khâu 1, 2 -> mô hình sau không tính lại PCA
     rs = C.RANDOM_STATE
     # class_weight="balanced": người có ít ảnh được tăng trọng số để không bị lấn át
     # probability=True: SVM tính được xác suất predict_proba (cần cho bước 4, 5)
     # gamma SVM rbf: sau chuẩn hóa + PCA, mặc định "scale" ≈ 1/9500 ≈ 1e-4 -> thử quanh đó
+    # tên tham số trong lưới: "model__C" = tham số C của khâu tên "model"
     return {
-        "Logistic Regression": (ong(LogisticRegression(max_iter=5000, class_weight="balanced")),
-                                {"model__C": [0.001, 0.01, 0.1, 1]}),
-        "KNN": (ong(KNeighborsClassifier(weights="distance")),
-                {"model__n_neighbors": [1, 3, 5, 7]}),
-        "SVM linear": (ong(SVC(kernel="linear", probability=True, class_weight="balanced",
-                               random_state=rs)),
-                       {"model__C": [0.0001, 0.001, 0.01, 0.1]}),
-        "SVM poly": (ong(SVC(kernel="poly", gamma="scale", probability=True,
+        "Logistic Regression": (
+            tao_pipeline(LogisticRegression(max_iter=5000, class_weight="balanced")),
+            {"model__C": [0.001, 0.01, 0.1, 1]}),
+        "KNN": (
+            tao_pipeline(KNeighborsClassifier(weights="distance")),
+            {"model__n_neighbors": [1, 3, 5, 7]}),
+        "SVM linear": (
+            tao_pipeline(SVC(kernel="linear", probability=True, class_weight="balanced",
+                             random_state=rs)),
+            {"model__C": [0.0001, 0.001, 0.01, 0.1]}),
+        "SVM poly": (
+            tao_pipeline(SVC(kernel="poly", gamma="scale", probability=True,
                              class_weight="balanced", random_state=rs)),
-                     {"model__degree": [2, 3], "model__C": [1, 10]}),
-        "SVM rbf": (ong(SVC(kernel="rbf", probability=True, class_weight="balanced",
-                            random_state=rs)),
-                    {"model__C": [1, 10, 100], "model__gamma": [1e-5, 1e-4, 1e-3]}),
-        "Naive Bayes": (ong(GaussianNB()),
-                        {"model__var_smoothing": [1e-9, 1e-2]}),
-        "Decision Tree": (ong(DecisionTreeClassifier(random_state=rs)),
-                          {"model__criterion": ["gini", "entropy"],
-                           "model__max_depth": [10, 20, None]}),
+            {"model__degree": [2, 3], "model__C": [1, 10]}),
+        "SVM rbf": (
+            tao_pipeline(SVC(kernel="rbf", probability=True, class_weight="balanced",
+                             random_state=rs)),
+            {"model__C": [1, 10, 100], "model__gamma": [1e-5, 1e-4, 1e-3]}),
+        "Naive Bayes": (
+            tao_pipeline(GaussianNB()),
+            {"model__var_smoothing": [1e-9, 1e-2]}),
+        "Decision Tree": (
+            tao_pipeline(DecisionTreeClassifier(random_state=rs)),
+            {"model__criterion": ["gini", "entropy"], "model__max_depth": [10, 20, None]}),
     }
 
 
-# ======================= 3.4 HUẤN LUYỆN + GRIDSEARCHCV =======================
+# ============ 3.4 HUẤN LUYỆN + GRIDSEARCHCV  (Thành viên 2 – Nguyễn Văn Lâm) ============
 def huan_luyen(X_train, y_train, k):
-    """GridSearchCV: với mỗi bộ tham số, chia tập train thành 5 phần, lần lượt lấy 1 phần để
-    kiểm tra, 4 phần để học -> độ chính xác trung bình. Chọn bộ tốt nhất rồi học lại
-    trên cả tập train."""
-    bo_nho = tempfile.mkdtemp(prefix="cache_pca_")
+    """Huấn luyện 7 mô hình. Với mỗi mô hình, GridSearchCV thử mọi bộ tham số trong lưới:
+    chia tập train thành 5 phần, lần lượt lấy 1 phần để kiểm tra, 4 phần để học -> độ chính
+    xác trung bình. Chọn bộ tốt nhất rồi học lại trên cả tập train."""
+    bo_nho = tempfile.mkdtemp(prefix="cache_pca_")           # thư mục tạm để Pipeline nhớ PCA
     # chia 5 phần (xáo trộn trước), mỗi phần giữ đúng tỉ lệ ảnh của từng người
     cv = StratifiedKFold(SO_FOLD, shuffle=True, random_state=C.RANDOM_STATE)
-    mo_hinh, bang = {}, []
+    mo_hinh, bang, luoi_rbf = {}, [], None
     try:
-        for ten, (ong, luoi) in tao_mo_hinh(k, bo_nho).items():
+        for ten, (pipe, luoi) in tao_mo_hinh(k, bo_nho).items():
             t0 = time.time()
-            gs = GridSearchCV(ong, luoi, cv=cv, scoring="accuracy", n_jobs=1)
+            # n_jobs=1: chạy lần lượt từng lần thử (Jetson ít RAM, dùng chung bộ nhớ PCA)
+            gs = GridSearchCV(pipe, luoi, cv=cv, scoring="accuracy", n_jobs=1)
             gs.fit(X_train, y_train)                                 # thử hết lưới tham số
             mo_hinh[ten] = gs.best_estimator_.set_params(memory=None)  # bộ tham số tốt nhất
             tham_so = {p.replace("model__", ""): v for p, v in gs.best_params_.items()}
@@ -189,11 +194,11 @@ def huan_luyen(X_train, y_train, k):
             print(f"  {ten:<20} CV {b['cv_%']:5.1f}% ± {b['cv_std_%']:4.1f} | {b['tham_so']} "
                   f"| {b['thoi_gian_s']}s")
     finally:
-        shutil.rmtree(bo_nho, ignore_errors=True)
+        shutil.rmtree(bo_nho, ignore_errors=True)             # xóa thư mục tạm
     return mo_hinh, pd.DataFrame(bang), luoi_rbf
 
 
-# ======================= 3.5 VẼ KẾT QUẢ =======================
+# ============ 3.5 VẼ KẾT QUẢ  (Thành viên 2 – Nguyễn Văn Lâm) ============
 def ve_ket_qua(bang, luoi_rbf, mo_hinh):
     # (a) Độ chính xác CV (cột) ± độ lệch chuẩn giữa 5 fold (thanh sai số)
     plt.figure(figsize=(11, 4.6))
@@ -201,9 +206,7 @@ def ve_ket_qua(bang, luoi_rbf, mo_hinh):
     mau = ["tomato" if v == tot else "steelblue" for v in bang["cv_%"]]        # đỏ = tốt nhất
     cot = plt.bar(bang["mo_hinh"], bang["cv_%"], yerr=bang["cv_std_%"], capsize=5,
                   edgecolor="black", color=mau)
-    for c, v in zip(cot, bang["cv_%"]):
-        plt.text(c.get_x() + c.get_width() / 2, 2, f"{v:.1f}%", ha="center", color="white",
-                 fontweight="bold")
+    plt.bar_label(cot, fmt="%.1f%%", label_type="center", color="white", fontweight="bold")
     plt.ylim(0, 105)
     plt.ylabel("Độ chính xác CV (%)")
     plt.xticks(rotation=15)
@@ -211,16 +214,15 @@ def ve_ket_qua(bang, luoi_rbf, mo_hinh):
     C.luu_hinh("3_cv_cac_mo_hinh.png")
 
     # (b) SVM rbf: độ chính xác CV theo C và gamma (bản đồ nhiệt)
-    M = luoi_rbf.pivot(index="model__C", columns="model__gamma", values="cv") * 100
-    plt.figure(figsize=(6, 4))
-    if sns is not None:
+    if luoi_rbf is not None:
+        # pivot: bảng dài (C, gamma, cv) -> ma trận hàng = C, cột = gamma
+        M = luoi_rbf.pivot(index="model__C", columns="model__gamma", values="cv") * 100
+        plt.figure(figsize=(6, 4))
         sns.heatmap(M, annot=True, fmt=".1f", cmap="coolwarm")
-    else:
-        plt.imshow(M.values, cmap="coolwarm")
-    plt.xlabel("gamma")
-    plt.ylabel("C")
-    plt.title("SVM rbf: độ chính xác CV (%) theo C và gamma")
-    C.luu_hinh("3_svm_rbf_C_gamma.png")
+        plt.xlabel("gamma")
+        plt.ylabel("C")
+        plt.title("SVM rbf: độ chính xác CV (%) theo C và gamma")
+        C.luu_hinh("3_svm_rbf_C_gamma.png")
 
     # (c) 3 tầng đầu của cây quyết định (plot_tree như bài giảng)
     cay = mo_hinh["Decision Tree"].named_steps["model"]
@@ -238,6 +240,7 @@ def main():
     print(" BƯỚC 3 – HUẤN LUYỆN MÔ HÌNH")
     print("=" * 70)
 
+    # ---------------- 3.1 – 3.2: Thành viên 1 (Bùi Trung Hiếu) ----------------
     print("\n3.1 Lấy dữ liệu train")
     X, df = C.doc_du_lieu()
     if "tap" not in df:
@@ -255,6 +258,7 @@ def main():
     print("\n3.2 Phân tích PCA")
     k = phan_tich_pca(X_train, y_train)
 
+    # ---------------- 3.3 – 3.5: Thành viên 2 (Nguyễn Văn Lâm) ----------------
     print(f"\n3.3 + 3.4 Huấn luyện 7 mô hình, chọn tham số bằng GridSearchCV {SO_FOLD}-fold")
     mo_hinh, bang, luoi_rbf = huan_luyen(X_train, y_train, k)
 

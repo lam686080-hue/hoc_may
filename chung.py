@@ -94,10 +94,7 @@ def doc_du_lieu():
         raise SystemExit("Chưa có dữ liệu. Chạy buoc1_chuan_bi_du_lieu.py trước.")
     anh = np.load(FILE_ANH)["anh"]
     df = pd.read_csv(FILE_DANH_SACH, dtype={"file": str, "ten": str, "tu_the": str,
-                                            "tap_co_dinh": str})
-    if "tap_co_dinh" not in df:                 # danh sách cũ (chưa có cột này)
-        df["tap_co_dinh"] = ""
-    df = df.fillna({"tu_the": "", "tap_co_dinh": ""})
+                                            "tap_co_dinh": str}).fillna("")
     if len(df) != len(anh):
         raise SystemExit("dataset/danh_sach.csv không khớp du_lieu_anh.npz. Chạy lại từ bước 1.")
     return vector_hoa(anh), df
@@ -133,11 +130,6 @@ def rut_gon(ten):
         return ten.replace("_", " ")
     p = ten.split("_")
     return " ".join([x[0] + "." for x in p[:-1]] + [p[-1]])
-
-
-def mau_lop(n):
-    """n màu khác nhau cho n người."""
-    return plt.get_cmap("tab10" if n <= 10 else "tab20")(np.arange(n) % 20)
 
 
 def ve_luoi_anh(X, dong1, dong2, dung, ten_file, tieu_de, cot=8):
