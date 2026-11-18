@@ -8,7 +8,7 @@
  Đầu vào  : dataset_nhe/mat_xam_100/<Tên>/*.png    ảnh nhóm tự thu bằng thu_anh_nhe.py (đã căn chỉnh)
             dataset/anh_chup_tay/<Tên>/*.jpg   ảnh chụp tay bằng điện thoại (ảnh gốc)
                 (ảnh trong <Tên>/train/ hoặc <Tên>/test/: chỉ dùng để train / chỉ để test)
-            Bộ LFW (tùy chọn --lfw; tải nếu chưa có, ~230 MB)
+            Bộ LFW (tải nếu chưa có, ~230 MB)
  Đầu ra   : dataset/du_lieu_anh.npz   tất cả ảnh đã tiền xử lý (N x 100 x 100)
             dataset/danh_sach.csv     mỗi dòng 1 ảnh: file, tên, nguồn, lượt, tư thế, vai trò
             dataset/chup_tay_100/     ảnh chụp tay đã căn chỉnh + bao_cao.csv
@@ -20,7 +20,6 @@
             1.5 Thống kê và trực quan hóa
             1.6 Lưu dữ liệu
  Chạy     : python buoc1_chuan_bi_du_lieu.py
-            Thêm --lfw nếu muốn dùng bộ ảnh LFW.
             python buoc1_chuan_bi_du_lieu.py --chuan-bi   (chỉ làm 1.2 + 1.3, trên laptop)
 =====================================================================
 """
@@ -34,7 +33,6 @@ import chung as C
 from chung import plt, cv2
 
 # ======================= CẤU HÌNH BƯỚC 1 =======================
-DUNG_LFW = "--lfw" in sys.argv     # chỉ lấy LFW khi người chạy chọn
 LFW_SO_ANH_TOI_THIEU = 70     # lấy người có >= 70 ảnh trong LFW -> 7 người
 LFW_TOI_DA_MOI_NGUOI = 150    # mỗi người LFW lấy tối đa 150 ảnh (cân bằng với 130 ảnh tự thu)
 LFW_SO_NGUOI_LA = 30          # 30 người LFW khác làm "người lạ" (chỉ để test)
@@ -216,8 +214,8 @@ def chuan_bi_lfw():
     """Tải LFW -> chọn người -> MediaPipe tìm mặt -> căn chỉnh 5 điểm GIỐNG HỆT ảnh tự thu
     -> lưu dataset/lfw_xam_100. Chỉ làm 1 lần, các lần sau dùng lại."""
     p_ds = os.path.join(C.THU_MUC_LFW, "danh_sach.csv")
-    if not DUNG_LFW or os.path.exists(p_ds):
-        print("  Đã có ảnh LFW căn chỉnh sẵn" if DUNG_LFW else "  DUNG_LFW = False: không dùng")
+    if os.path.exists(p_ds):
+        print("  Đã có ảnh LFW căn chỉnh sẵn")
         return
     if thu_muc_lfw_goc() is None:
         print("  Đang tải bộ LFW (~230 MB, chỉ 1 lần)...")
@@ -264,8 +262,6 @@ def chuan_bi_lfw():
 
 def doc_anh_lfw():
     p_ds = os.path.join(C.THU_MUC_LFW, "danh_sach.csv")
-    if not DUNG_LFW or not os.path.exists(p_ds):
-        return []
     lfw = pd.read_csv(p_ds, dtype=str)
     dong = [{"duong_dan": os.path.join(C.THU_MUC_LFW, r.ten, r.file + ".png"), "file": r.file,
              "ten": r.ten, "nguon": "lfw", "luot": 0, "tu_the": "", "vai_tro": r.vai_tro,
@@ -367,7 +363,7 @@ def main():
     if df.empty:
         raise SystemExit("Không có ảnh hợp lệ. Hãy chạy thu_anh_nhe.py hoặc kiểm tra dataset_nhe/mat_xam_100.")
     if df.loc[df["vai_tro"] == "biet", "ten"].nunique() < 2:
-        raise SystemExit("Cần ít nhất 2 người quen để phân loại. Thêm ảnh hoặc chạy với --lfw.")
+        raise SystemExit("Cần ít nhất 2 người quen để phân loại. Thêm ảnh cho người quen.")
 
     print("\n1.5 Thống kê và trực quan hóa")
     thong_ke_va_ve(df, anh)
