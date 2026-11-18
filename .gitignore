@@ -1,9 +1,0 @@
-# Anh da can chinh va du lieu buoc 1 duoc theo doi trong Git.
-/du_lieu_lfw/
-__pycache__/
-*.py[cod]
-/ket_qua/*
-!/ket_qua/1_*.png
-/dataset/anh_chup_tay/
-/dataset/chup_tay_100/
-/mo_hinh/
