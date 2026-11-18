@@ -5,10 +5,10 @@
 =====================================================================
  Làm gì   : Gom ảnh mặt từ 3 nguồn, đưa về CÙNG một dạng (căn chỉnh 5 điểm, xám 100x100,
             lọc Gaussian + CLAHE), thống kê + vẽ biểu đồ, lưu lại cho các bước sau.
- Đầu vào  : dataset/mat_xam_100/<Tên>/*.png    ảnh nhóm tự thu bằng thu_anh.py (đã căn chỉnh)
+ Đầu vào  : dataset_nhe/mat_xam_100/<Tên>/*.png    ảnh nhóm tự thu bằng thu_anh_nhe.py (đã căn chỉnh)
             dataset/anh_chup_tay/<Tên>/*.jpg   ảnh chụp tay bằng điện thoại (ảnh gốc)
                 (ảnh trong <Tên>/train/ hoặc <Tên>/test/: chỉ dùng để train / chỉ để test)
-            Bộ LFW (tự tải lần đầu, ~230 MB)
+            Bộ LFW (tùy chọn --lfw; tải nếu chưa có, ~230 MB)
  Đầu ra   : dataset/du_lieu_anh.npz   tất cả ảnh đã tiền xử lý (N x 100 x 100)
             dataset/danh_sach.csv     mỗi dòng 1 ảnh: file, tên, nguồn, lượt, tư thế, vai trò
             dataset/chup_tay_100/     ảnh chụp tay đã căn chỉnh + bao_cao.csv
@@ -20,6 +20,7 @@
             1.5 Thống kê và trực quan hóa
             1.6 Lưu dữ liệu
  Chạy     : python buoc1_chuan_bi_du_lieu.py
+            Thêm --lfw nếu muốn dùng bộ ảnh LFW.
             python buoc1_chuan_bi_du_lieu.py --chuan-bi   (chỉ làm 1.2 + 1.3, trên laptop)
 =====================================================================
 """
@@ -33,7 +34,7 @@ import chung as C
 from chung import plt, cv2
 
 # ======================= CẤU HÌNH BƯỚC 1 =======================
-DUNG_LFW = True               # False: không dùng LFW (cần >= 2 người trong lớp)
+DUNG_LFW = "--lfw" in sys.argv     # chỉ lấy LFW khi người chạy chọn
 LFW_SO_ANH_TOI_THIEU = 70     # lấy người có >= 70 ảnh trong LFW -> 7 người
 LFW_TOI_DA_MOI_NGUOI = 150    # mỗi người LFW lấy tối đa 150 ảnh (cân bằng với 130 ảnh tự thu)
 LFW_SO_NGUOI_LA = 30          # 30 người LFW khác làm "người lạ" (chỉ để test)
@@ -47,26 +48,29 @@ KC_MAT_CHUAN = 70             # mặt quá to thì thu nhỏ ảnh để 2 mắt
 
 # ======================= 1.1 ĐỌC ẢNH TỰ THU =======================
 def doc_anh_tu_thu():
-    """Tên ảnh do thu_anh.py đặt: <Tên>_<số>_L<lượt>_<tư thế>.png -> biết người, lượt, tư thế.
+    """Tên ảnh do thu_anh_nhe.py đặt: <Tên>_<số>_L<lượt>_<tư thế>.png -> biết người, lượt, tư thế.
     Ảnh bị kiem_tra.py đánh dấu LOI thì bỏ qua."""
-    p_loi = os.path.join(C.DATASET, "kiem_tra", "bao_cao.csv")
+    thu_muc_nhe = os.path.join(C.THU_MUC, "dataset_nhe")
+    thu_muc_anh = os.path.join(thu_muc_nhe, "mat_xam_100")
+    print(f"  Đọc ảnh thu nhẹ tại: {thu_muc_anh}")
+    p_loi = os.path.join(thu_muc_nhe, "kiem_tra", "bao_cao.csv")
     loi = set()
     if os.path.exists(p_loi):
         bc = pd.read_csv(p_loi, encoding="utf-8-sig", dtype=str)
         loi = set(bc.loc[bc["trang_thai"] == "LOI", "file"])
     dong, sai_ten = [], 0
-    for p in sorted(glob.glob(os.path.join(C.THU_MUC_TU_THU, "*", "*.png"))):
+    for p in sorted(glob.glob(os.path.join(thu_muc_anh, "*", "*.png"))):
         goc = os.path.splitext(os.path.basename(p))[0]
         phan = goc.rsplit("_", 3)                       # tách 3 dấu "_" cuối: [tên, số, L1, tư thế]
         if len(phan) < 4 or phan[2][:1] != "L" or not phan[2][1:].isdigit():
-            sai_ten += 1                                # không phải ảnh do thu_anh.py chụp
+            sai_ten += 1                                # không phải ảnh do thu_anh_nhe.py chụp
         elif goc not in loi:
             dong.append({"duong_dan": p, "file": goc, "ten": os.path.basename(os.path.dirname(p)),
                          "nguon": "tu_thu", "luot": int(phan[2][1:]), "tu_the": phan[3],
                          "vai_tro": "biet", "tap_co_dinh": ""})
     print(f"  Ảnh tự thu: {len(dong)} ảnh ({len(loi)} ảnh LOI bị bỏ qua)")
     if sai_ten:
-        print(f"  ! Bỏ qua {sai_ten} file không đúng tên của thu_anh.py "
+        print(f"  ! Bỏ qua {sai_ten} file không đúng tên của thu_anh_nhe.py "
               "(ảnh chụp tay hãy để trong dataset/anh_chup_tay/<Tên>/)")
     return dong
 
@@ -74,7 +78,7 @@ def doc_anh_tu_thu():
 # ======================= 1.2 ẢNH CHỤP TAY =======================
 def tao_bo_tim_mat(so_mat):
     """MediaPipe Face Landmarker chế độ IMAGE (ảnh tĩnh): tìm mặt + 478 điểm mốc."""
-    import thu_anh as T
+    import thu_anh_nhe as T
     from mediapipe.tasks import python as mp_python
     from mediapipe.tasks.python import vision
     return vision.FaceLandmarker.create_from_options(vision.FaceLandmarkerOptions(
@@ -98,7 +102,7 @@ def tim_mat(lm, bgr):
 
 def can_chinh_1_anh(lm, nguon, dich):
     """1 ảnh điện thoại -> ảnh mặt xám 100x100 căn chỉnh 5 điểm. Trả về kết quả (OK hoặc lỗi)."""
-    import thu_anh as T
+    import thu_anh_nhe as T
     from PIL import Image, ImageOps                     # Pillow: đọc ảnh + xoay đúng chiều (EXIF)
     try:
         with Image.open(nguon) as im:
@@ -128,7 +132,7 @@ def can_chinh_anh_chup_tay():
     if not os.path.isdir(C.THU_MUC_CHUP_TAY):
         print("  (máy này không có ảnh gốc dataset/anh_chup_tay – dùng ảnh đã căn chỉnh nếu có)")
         return
-    import thu_anh as T
+    import thu_anh_nhe as T
     # (a) danh sách việc: (tên người, ảnh gốc, ảnh 100x100 sẽ lưu)
     viec = []
     for p in sorted(glob.glob(os.path.join(C.THU_MUC_CHUP_TAY, "*", "**", "*.*"), recursive=True)):
@@ -227,9 +231,10 @@ def chuan_bi_lfw():
     if goc is None:
         raise SystemExit("Chưa có LFW: tải tay lfw-funneled.tgz tại "
                          "https://ndownloader.figshare.com/files/5976015, giải nén vào du_lieu_lfw")
-    import thu_anh as T
+    import thu_anh_nhe as T
     rng = np.random.default_rng(C.RANDOM_STATE)
-    so_anh = {n: len(os.listdir(os.path.join(goc, n))) for n in sorted(os.listdir(goc))}
+    thu_muc_nguoi = sorted(n for n in os.listdir(goc) if os.path.isdir(os.path.join(goc, n)))
+    so_anh = {n: len(os.listdir(os.path.join(goc, n))) for n in thu_muc_nguoi}
     biet = [n for n, s in so_anh.items() if s >= LFW_SO_ANH_TOI_THIEU]
     con_lai = [n for n, s in so_anh.items() if 5 <= s < LFW_SO_ANH_TOI_THIEU]
     la = sorted(rng.choice(con_lai, size=min(LFW_SO_NGUOI_LA, len(con_lai)), replace=False))
@@ -317,7 +322,7 @@ def thong_ke_va_ve(df, anh):
     chon = rng.choice(len(df), size=200 if len(df) > 200 else len(df), replace=False)
     truoc = np.array([C.doc_anh_xam(p) for p in df.loc[chon, "duong_dan"]])
     fig = plt.figure(figsize=(12, 4.6))
-    for j in range(4):
+    for j in range(min(4, len(chon))):
         for hang, a_, nhan in ((0, truoc[j], "Trước"), (1, anh[chon[j]], "Sau lọc + CLAHE")):
             a = fig.add_subplot(2, 6, hang * 6 + j + 1)
             a.imshow(a_, cmap="gray", vmin=0, vmax=255)
@@ -342,7 +347,7 @@ def main():
     print("=" * 70)
     print(" BƯỚC 1 – CHUẨN BỊ DỮ LIỆU")
     print("=" * 70)
-    print("\n1.1 Đọc ảnh tự thu (thu_anh.py)")
+    print("\n1.1 Đọc ảnh tự thu (thu_anh_nhe.py)")
     dong = doc_anh_tu_thu()
 
     print("\n1.2 Ảnh chụp tay")
@@ -359,13 +364,16 @@ def main():
     print("\n1.4 Tiền xử lý (lọc Gaussian + CLAHE)")
     anh, df = tien_xu_ly_tat_ca(dong)
     print(f"  {len(anh)} ảnh -> mảng {anh.shape} (mỗi ảnh sẽ thành vector 10.000 chiều)")
-    if df.empty or df.loc[df["vai_tro"] == "biet", "ten"].nunique() < 2:
-        raise SystemExit("Cần ít nhất 2 người quen để phân loại. Thêm ảnh hoặc bật DUNG_LFW.")
+    if df.empty:
+        raise SystemExit("Không có ảnh hợp lệ. Hãy chạy thu_anh_nhe.py hoặc kiểm tra dataset_nhe/mat_xam_100.")
+    if df.loc[df["vai_tro"] == "biet", "ten"].nunique() < 2:
+        raise SystemExit("Cần ít nhất 2 người quen để phân loại. Thêm ảnh hoặc chạy với --lfw.")
 
     print("\n1.5 Thống kê và trực quan hóa")
     thong_ke_va_ve(df, anh)
 
     print("\n1.6 Lưu dữ liệu")
+    os.makedirs(C.DATASET, exist_ok=True)
     np.savez_compressed(C.FILE_ANH, anh=anh)                   # lưu mảng ảnh (nén)
     df.drop(columns="duong_dan").to_csv(C.FILE_DANH_SACH, index=False)
     print("  -> dataset/du_lieu_anh.npz\n  -> dataset/danh_sach.csv")
