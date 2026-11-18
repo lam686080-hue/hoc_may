@@ -9,7 +9,7 @@
    - Hình vẽ cùng một kiểu, lưu vào thư mục ket_qua/.
 
  Ba nguồn ảnh (cột "nguon" trong danh_sach.csv):
-   tu_thu   : ảnh nhóm tự thu bằng thu_anh.py      dataset/mat_xam_100/<Tên>/
+   tu_thu   : ảnh nhóm tự thu bằng thu_anh_nhe.py      dataset_nhe/mat_xam_100/<Tên>/
    chup_tay : ảnh chụp tay bằng điện thoại          dataset/anh_chup_tay/<Tên>/  (ảnh gốc)
               (các bạn trong lớp, thêm ảnh của nhóm) -> bước 1 căn chỉnh vào dataset/chup_tay_100/
    lfw      : bộ ảnh công khai LFW                  dataset/lfw_xam_100/<Tên>/
@@ -17,7 +17,7 @@
  Dữ liệu đi qua các bước:
    Bước 1 -> dataset/du_lieu_anh.npz + dataset/danh_sach.csv
    Bước 2 -> dataset/danh_sach.csv (thêm cột "tap": train / test / nguoi_la)
-   Bước 3 -> mo_hinh/cac_mo_hinh.joblib + ket_qua/3_ket_qua_cv.csv
+   Bước 3 -> mo_hinh/hoi_quy_logistic.joblib + ket_qua/3_ket_qua_cv.csv
    Bước 4 -> ket_qua/du_doan.npz + ket_qua/4_du_doan_tap_test.csv
    Bước 5 -> mo_hinh/mo_hinh_tot_nhat.joblib + ket_qua/xem_ket_qua.html
    Bước 6 -> nhận diện qua camera, ghi diem_danh.csv
@@ -39,7 +39,8 @@ import matplotlib.pyplot as plt
 # ============================ ĐƯỜNG DẪN ============================
 THU_MUC = os.path.dirname(os.path.abspath(__file__))
 DATASET = os.path.join(THU_MUC, "dataset")
-THU_MUC_TU_THU = os.path.join(DATASET, "mat_xam_100")         # ảnh mặt tự thu (thu_anh.py)
+DATASET_NHE = os.path.join(THU_MUC, "dataset_nhe")
+THU_MUC_TU_THU = os.path.join(DATASET_NHE, "mat_xam_100")         # ảnh mặt tự thu (thu_anh_nhe.py)
 THU_MUC_CHUP_TAY = os.path.join(DATASET, "anh_chup_tay")      # ảnh chụp tay gốc, 1 người 1 thư mục
 THU_MUC_CHUP_TAY_100 = os.path.join(DATASET, "chup_tay_100")  # ảnh chụp tay đã căn chỉnh (bước 1)
 THU_MUC_LFW = os.path.join(DATASET, "lfw_xam_100")            # ảnh LFW đã căn chỉnh (bước 1 tạo)
@@ -49,7 +50,7 @@ MO_HINH = os.path.join(THU_MUC, "mo_hinh")                    # mô hình đã h
 
 FILE_ANH = os.path.join(DATASET, "du_lieu_anh.npz")                  # bước 1 -> 3, 4, 5
 FILE_DANH_SACH = os.path.join(DATASET, "danh_sach.csv")              # bước 1, 2 -> 3, 4, 5
-FILE_CAC_MO_HINH = os.path.join(MO_HINH, "cac_mo_hinh.joblib")       # bước 3 -> 4, 5
+FILE_HOI_QUY_LOGISTIC = os.path.join(MO_HINH, "hoi_quy_logistic.joblib")       # bước 3 -> 4, 5
 FILE_KET_QUA_CV = os.path.join(KET_QUA, "3_ket_qua_cv.csv")          # bước 3 -> 5
 FILE_DU_DOAN = os.path.join(KET_QUA, "du_doan.npz")                  # bước 4 -> 5
 FILE_MO_HINH_TOT = os.path.join(MO_HINH, "mo_hinh_tot_nhat.joblib")  # bước 5 -> 6
@@ -63,7 +64,7 @@ RANDOM_STATE = 42         # cố định yếu tố ngẫu nhiên -> chạy lạ
 TEN_TU_THE = {"thang": "Nhìn thẳng", "trai": "Quay trái", "phai": "Quay phải",
               "len": "Ngẩng lên", "xuong": "Cúi xuống"}
 # 3 nguồn ảnh: tên hiển thị + màu dùng chung cho mọi biểu đồ
-NGUON = {"tu_thu": ("Tự thu (thu_anh.py)", "darkorange"),
+NGUON = {"tu_thu": ("Tự thu (thu_anh_nhe.py)", "darkorange"),
          "chup_tay": ("Chụp tay (điện thoại)", "mediumpurple"),
          "lfw": ("LFW (ảnh báo chí)", "steelblue")}
 TRONG_LOP = ("tu_thu", "chup_tay")   # người trong lớp: được hiện tên + điểm danh ở bước 6
@@ -102,7 +103,11 @@ def doc_du_lieu():
 
 def doc_anh_xam(duong_dan):
     """Đọc ảnh xám, chạy được cả với đường dẫn có dấu tiếng Việt (cv2.imread thì không)."""
-    return cv2.imdecode(np.fromfile(duong_dan, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
+    try:
+        du_lieu = np.fromfile(duong_dan, dtype=np.uint8)
+        return cv2.imdecode(du_lieu, cv2.IMREAD_GRAYSCALE) if du_lieu.size else None
+    except (OSError, cv2.error):
+        return None
 
 
 def luu_png(duong_dan, anh):

@@ -34,7 +34,7 @@ from chung import plt, cv2
 
 # ======================= CẤU HÌNH BƯỚC 1 =======================
 LFW_SO_ANH_TOI_THIEU = 70     # lấy người có >= 70 ảnh trong LFW -> 7 người
-LFW_TOI_DA_MOI_NGUOI = 150    # mỗi người LFW lấy tối đa 150 ảnh (cân bằng với 130 ảnh tự thu)
+LFW_TOI_DA_MOI_NGUOI = 150    # mỗi người LFW lấy tối đa 150 ảnh
 LFW_SO_NGUOI_LA = 30          # 30 người LFW khác làm "người lạ" (chỉ để test)
 LFW_ANH_MOI_NGUOI_LA = 5      # mỗi người lạ lấy 5 ảnh
 SO_ANH_TOI_THIEU = 5          # người trong lớp có < 5 ảnh: chưa đủ để học -> làm người lạ (test)
@@ -48,10 +48,9 @@ KC_MAT_CHUAN = 70             # mặt quá to thì thu nhỏ ảnh để 2 mắt
 def doc_anh_tu_thu():
     """Tên ảnh do thu_anh_nhe.py đặt: <Tên>_<số>_L<lượt>_<tư thế>.png -> biết người, lượt, tư thế.
     Ảnh bị kiem_tra.py đánh dấu LOI thì bỏ qua."""
-    thu_muc_nhe = os.path.join(C.THU_MUC, "dataset_nhe")
-    thu_muc_anh = os.path.join(thu_muc_nhe, "mat_xam_100")
+    thu_muc_anh = C.THU_MUC_TU_THU
     print(f"  Đọc ảnh thu nhẹ tại: {thu_muc_anh}")
-    p_loi = os.path.join(thu_muc_nhe, "kiem_tra", "bao_cao.csv")
+    p_loi = os.path.join(C.DATASET_NHE, "kiem_tra", "bao_cao.csv")
     loi = set()
     if os.path.exists(p_loi):
         bc = pd.read_csv(p_loi, encoding="utf-8-sig", dtype=str)

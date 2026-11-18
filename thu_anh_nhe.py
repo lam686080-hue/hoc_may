@@ -23,7 +23,7 @@ CHỈ CHỤP KHI ĐẠT TẤT CẢ:
 DỮ LIỆU LƯU RA (thư mục "dataset_nhe" cạnh file này)
   dataset_nhe/anh_goc/<ten>/*.jpg      khung hình gốc đầy đủ (để sau này xử lý lại tùy ý)
   dataset_nhe/mat_mau_112/<ten>/*.png  mặt màu đã căn chỉnh 112x112 (chuẩn ArcFace)
-  dataset_nhe/mat_xam_100/<ten>/*.png  mặt xám đã căn chỉnh 100x100 (dùng cho PCA + SVM)
+  dataset_nhe/mat_xam_100/<ten>/*.png  mặt xám đã căn chỉnh 100x100 (dùng cho PCA và hồi quy logistic)
   dataset_nhe/metadata.csv             thông tin từng ảnh: người, lượt, tư thế, góc đầu,
                                    điểm cười, độ nét, độ sáng, 5 điểm mốc...
   dataset_nhe/xem_nhanh/<ten>.jpg      lưới toàn bộ ảnh mặt của 1 người để soát nhanh
@@ -45,6 +45,7 @@ import json
 import math
 import time
 import queue
+from pathlib import Path
 import threading
 import unicodedata
 import urllib.request
@@ -70,7 +71,7 @@ except ImportError:
 # 1. CẤU HÌNH
 # =====================================================================
 # ---------- Camera ----------
-CAMERA = 0   # webcam laptop; với IP Webcam, dùng URL http://IP:8080/video
+CAMERA = 0   # webcam đầu tiên trên máy đang chạy (Orin hoặc laptop); với IP Webcam, dùng URL http://IP:8080/video
 # Chiều xoay hình: "tu_dong" = lúc khởi động tự thử 4 chiều, chọn chiều có khuôn mặt ĐỨNG THẲNG.
 # Muốn cố định thì đặt: cv2.ROTATE_90_CLOCKWISE / cv2.ROTATE_90_COUNTERCLOCKWISE / cv2.ROTATE_180 / None
 XOAY = None   # giữ nguyên chiều webcam giữa các lần chạy
@@ -161,7 +162,7 @@ COT_CSV = ["file", "so", "ten", "luot", "tu_the", "khoang_goc", "phien", "thoi_g
 
 # =====================================================================
 # 2. HÀM XỬ LÝ KHUÔN MẶT (dùng lại được ở bước nhận diện/triển khai:
-#    from thu_anh import tao_landmarker, trich_thong_tin, can_chinh_mat)
+#    from thu_anh_nhe import tao_landmarker, trich_thong_tin, can_chinh_mat)
 # =====================================================================
 def tai_model():
     """Tải model Face Landmarker (lần đầu) và trả về nội dung dạng bytes."""
@@ -267,6 +268,11 @@ def can_chinh_mat(anh, d5, kich_thuoc=112):
 def trich_thong_tin(lms, blendshapes, W, H):
     """Từ kết quả MediaPipe (1 khuôn mặt) -> dict thông tin dùng để kiểm tra & lưu."""
     diem = np.array([(p.x * W, p.y * H) for p in lms], dtype=np.float64)
+    return thong_tin_tu_diem(diem, blendshapes, W, H)
+
+
+def thong_tin_tu_diem(diem, blendshapes, W, H):
+    """Tính khung mặt, góc đầu và các điểm căn chỉnh từ tọa độ pixel."""
     goc = goc_dau(diem, W, H)
     if goc is None:
         return None
@@ -415,16 +421,8 @@ def tu_nhan_chieu(cam, giay=30):
     return False, None
 
 
-def ghi_cau_hinh(phien, cao, rong, xoay):
-    """Ghi cấu hình thu vào JSON. Script kiểm tra đọc file này để dùng ĐÚNG ngưỡng lúc thu."""
-    du_lieu = {}
-    if os.path.exists(FILE_CAU_HINH):
-        try:
-            with open(FILE_CAU_HINH, encoding="utf-8") as f:
-                du_lieu = json.load(f)
-        except Exception:
-            du_lieu = {}
-    du_lieu["cau_hinh"] = {
+def cau_hinh_thu():
+    return {
         "luot": LUOT, "tu_the": [list(t[:4]) + [t[4]] for t in TU_THE],
         "tong_anh_moi_nguoi": TONG_MOI_NGUOI,
         "nguong": {
@@ -441,6 +439,18 @@ def ghi_cau_hinh(phien, cao, rong, xoay):
         "can_chinh": "Umeyama 5 diem -> mau ArcFace 112x112; ban xam 100x100",
         "phat_hien": "MediaPipe Face Landmarker (478 diem + blendshapes)",
     }
+
+
+def ghi_cau_hinh(phien, cao, rong, xoay):
+    """Ghi cấu hình thu vào JSON. Script kiểm tra đọc file này để dùng ĐÚNG ngưỡng lúc thu."""
+    du_lieu = {}
+    if os.path.exists(FILE_CAU_HINH):
+        try:
+            with open(FILE_CAU_HINH, encoding="utf-8") as f:
+                du_lieu = json.load(f)
+        except Exception:
+            du_lieu = {}
+    du_lieu["cau_hinh"] = cau_hinh_thu()
     du_lieu.setdefault("phien", []).append({
         "phien": phien, "bat_dau": datetime.now().isoformat(timespec="seconds"),
         "camera": CAMERA, "do_phan_giai": f"{rong}x{cao}", "xoay": TEN_XOAY.get(xoay, str(xoay)),
@@ -552,6 +562,8 @@ class CameraLuong:
 
     def dung(self):
         self.chay = False
+        # Để luồng đọc tự release camera trước khi Python thoát (IP camera có timeout 5 giây).
+        self.luong.join(timeout=6)
 
 
 class HoiDap:
@@ -584,14 +596,24 @@ class HoiDap:
         return kq
 
 
+def thong_tin_ten_anh(ten, goc):
+    """Đọc số thứ tự, lượt và tư thế từ tên PNG của bộ thu."""
+    phan = goc.rsplit("_", 3)
+    if (len(phan) != 4 or phan[0] != ten or not phan[1].isdigit()
+            or not phan[2].startswith("L") or not phan[2][1:].isdigit()):
+        return None
+    return int(phan[1]), int(phan[2][1:]), phan[3]
+
+
 class TienDo:
-    """Đếm số ảnh đã có của 1 người (đọc từ metadata.csv) -> biết cần chụp tiếp gì."""
+    """Đếm ảnh trong metadata và ảnh xám đã xuất để tiếp tục đúng phần còn thiếu."""
 
     def __init__(self, ten):
         self.ten = ten
         self.dem = {k: 0 for k in KE_HOACH}
         self.dem_khoang = {(l, b): [0] * len(TU_THE[b][4] or []) for (l, b) in KE_HOACH}
         self.so_max = 0
+        da_ghi = set()
         for d in doc_csv():
             if d.get("ten") != ten:
                 continue
@@ -605,12 +627,28 @@ class TienDo:
                 if 0 <= kg < len(self.dem_khoang[k]):
                     self.dem_khoang[k][kg] += 1
             self.so_max = max(self.so_max, so)
-        thu_muc = os.path.join(THU_MUC_XAM, ten)       # tránh ghi đè file đã có
-        if os.path.isdir(thu_muc):
-            for fn in os.listdir(thu_muc):
-                phan = os.path.splitext(fn)[0].rsplit("_", 3)
-                if len(phan) == 4 and phan[1].isdigit():
-                    self.so_max = max(self.so_max, int(phan[1]))
+            da_ghi.add(d.get("file"))
+        # Bản dữ liệu trên Git có ảnh xám và tên tư thế, có thể thiếu metadata.csv.
+        for anh in (Path(THU_MUC_XAM) / ten).glob("*.png"):
+            thong_tin = thong_tin_ten_anh(ten, anh.stem)
+            if thong_tin is None:
+                continue
+            so, luot, ma = thong_tin
+            self.so_max = max(self.so_max, so)
+            k = (luot - 1, CHI_SO_MA.get(ma, -1))
+            if anh.stem in da_ghi or k not in self.dem:
+                continue
+            if (Path(THU_MUC_MAU, ten, anh.name).exists()
+                    or Path(THU_MUC_ANH_GOC, ten, anh.stem + ".jpg").exists()):
+                continue  # bản thu gián đoạn: kiem_tra.py sẽ đối chiếu với metadata
+            # Bộ thu hiện tại có tối đa một khoảng góc cho mỗi tư thế.
+            khoang = self.dem_khoang[k]
+            if len(khoang) <= 1:
+                xam = doc_anh(anh, co_mau=False) if anh.stat().st_size else None
+                if xam is not None and xam.shape == (100, 100):
+                    self.dem[k] += 1
+                    if khoang:
+                        khoang[0] += 1
 
     def tong(self):
         return sum(self.dem.values())
@@ -622,7 +660,7 @@ class TienDo:
         return None
 
     def con_thieu(self):
-        """Danh sách phần còn thiếu, vd ['L1 trai 20-30°: 1', 'L2 cuoi: 2']."""
+        """Danh sách phần còn thiếu, vd ['L1 trai 7-18°: 1', 'L1 thang: 2']."""
         ds = []
         for (l, b) in KE_HOACH:
             ma, _, _, so_anh, khoang = TU_THE[b]

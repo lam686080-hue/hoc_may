@@ -1,13 +1,13 @@
 """
 =====================================================================
- KIỂM TRA DỮ LIỆU KHUÔN MẶT ĐÃ THU  (chạy riêng, KHÔNG cần thu_anh.py)
+ KIỂM TRA DỮ LIỆU KHUÔN MẶT ĐÃ THU  (dùng cấu hình của thu_anh_nhe.py)
 =====================================================================
 Cài đặt (1 lần):  pip install mediapipe opencv-python numpy
-Chạy:             python kiem_tra.py               (thư mục dataset cạnh file này)
+Chạy:             python kiem_tra.py               (thư mục dataset_nhe cạnh file này)
             hoặc  python kiem_tra.py <đường_dẫn_dataset>
-!! Hãy TẮT thu_anh.py trước khi chạy kiểm tra.
+!! Hãy TẮT thu_anh_nhe.py trước khi chạy kiểm tra.
 
-Ngưỡng kiểm tra được đọc từ dataset/cau_hinh_thu_thap.json (do thu_anh.py ghi lúc thu)
+Ngưỡng kiểm tra được đọc từ dataset_nhe/cau_hinh_thu_thap.json (do thu_anh_nhe.py ghi lúc thu)
 -> kiểm tra đúng theo cấu hình đã dùng khi chụp.
 
 6 NHÓM KIỂM TRA
@@ -24,14 +24,14 @@ MỨC ĐỘ
   CANH_BAO : nghi vấn -> mở lưới ảnh xem bằng mắt, đa số vẫn dùng được
 
 THU LẠI ẢNH LỖI
-  Cuối báo cáo, script hỏi có chuyển ảnh lỗi sang dataset/loai_bo/<thời_gian>/ không.
+  Cuối báo cáo, script hỏi có chuyển ảnh lỗi sang dataset_nhe/loai_bo/<thời_gian>/ không.
   Đồng ý -> ảnh lỗi được CHUYỂN (không xóa) + bỏ khỏi metadata.csv (có bản sao lưu).
-  Sau đó: chạy thu_anh.py, nhập đúng tên, gõ c -> tự chụp lại đúng những ảnh còn thiếu.
+  Sau đó: chạy thu_anh_nhe.py, nhập đúng tên, gõ c -> tự chụp lại đúng những ảnh còn thiếu.
   Thu xong chạy lại file này để kiểm tra lần nữa.
   Muốn thu lại 1 ảnh CẢNH BÁO cụ thể: xóa ảnh đó trong mat_mau_112 rồi chạy lại kiểm tra
   (ảnh sẽ thành LỖI "thiếu file" và được đề nghị thu lại).
 
-KẾT QUẢ (dataset/kiem_tra)
+KẾT QUẢ (dataset_nhe/kiem_tra)
   bao_cao.csv      trạng thái từng ảnh + lý do
   <ten>.jpg        lưới ảnh theo lượt & tư thế: viền ĐỎ = lỗi, viền CAM = cảnh báo
   phan_bo_goc.png  biểu đồ góc đầu toàn bộ ảnh (dùng cho báo cáo)
@@ -44,11 +44,12 @@ import json
 import math
 import shutil
 import collections
-import urllib.request
 from datetime import datetime
+from pathlib import Path
 
 import cv2
 import numpy as np
+import thu_anh_nhe as T
 
 try:
     import mediapipe as mp
@@ -67,24 +68,6 @@ GOC_LON_YAW, GOC_LON_PITCH = 25, 15   # [4] ảnh góc lớn: đo lại không t
 NGUONG_TRUNG = 3.0           # [5] 2 ảnh khác nhau ít hơn mức này -> gần trùng
 TI_LE_NHAN = 0.8             # [6] gần người khác < 80% khoảng cách tới chính mình -> nghi sai nhãn
 
-THU_MUC_CODE = os.path.dirname(os.path.abspath(__file__))
-MODEL = os.path.join(THU_MUC_CODE, "face_landmarker.task")
-MODEL_URL = ("https://storage.googleapis.com/mediapipe-models/face_landmarker/"
-             "face_landmarker/float16/1/face_landmarker.task")
-
-# Ngưỡng MẶC ĐỊNH (giống thu_anh.py) – chỉ dùng khi không đọc được cau_hinh_thu_thap.json
-MAC_DINH = {
-    "THANG_TOI_DA": 7, "LECH_PHU_QUAY": 12, "LECH_PHU_NGANG_CUI": 10, "BIEU_CAM_LECH_TOI_DA": 12,
-    "SAI_HUONG": 3, "NGUONG_CUOI": 0.50, "CUOI_TOI_DA": 0.40, "NGUONG_HA_MIENG": 0.25,
-    "NGUONG_NHAM_MAT": 0.50, "NGUONG_NHAM_MAT_KHI_CUI": 0.85, "MAT_TOI_THIEU_PX": 150,
-    "MAT_TOI_DA_TI_LE": 0.85, "LE_KHUNG_TI_LE": 0.02, "DO_SANG_MIN": 55, "DO_SANG_MAX": 200,
-    "TUONG_PHAN_MIN": 20, "NGUONG_NET": 25, "NGUONG_KHAC": 4.0, "GIU_KHUNG": 3,
-    "XU_LY_CAO": 480, "LUU_ANH_GOC": True,
-}
-TU_THE_MAC_DINH = [("thang", 15, None), ("trai", 15, [(10, 20), (20, 30), (30, 42)]),
-                   ("phai", 15, [(10, 20), (20, 30), (30, 42)]), ("len", 10, [(8, 15), (15, 25)]),
-                   ("xuong", 10, [(8, 15), (15, 25)])]
-SO_LUOT_MAC_DINH = 2
 # ==================================================================
 
 LOI, CANH_BAO, DAT = "LOI", "CANH_BAO", "DAT"
@@ -95,9 +78,9 @@ SO_COT = ["yaw", "pitch", "yaw_tuong_doi", "pitch_tuong_doi", "cuoi", "ha_mieng"
 # đường dẫn (gán trong cai_duong_dan)
 THU_MUC_DATA = THU_MUC_ANH_GOC = THU_MUC_MAU = THU_MUC_XAM = FILE_CSV = FILE_CAU_HINH = THU_MUC_KQ = ""
 # cấu hình (gán trong doc_cau_hinh)
-C = dict(MAC_DINH)
-TU_THE = list(TU_THE_MAC_DINH)
-SO_LUOT = SO_LUOT_MAC_DINH
+C = {}
+TU_THE = []
+SO_LUOT = 0
 
 
 def cai_duong_dan(thu_muc_data):
@@ -114,21 +97,21 @@ def cai_duong_dan(thu_muc_data):
 def doc_cau_hinh():
     """Đọc ngưỡng đã dùng lúc thu từ cau_hinh_thu_thap.json (nếu có)."""
     global C, TU_THE, SO_LUOT
-    C, TU_THE, SO_LUOT = dict(MAC_DINH), list(TU_THE_MAC_DINH), SO_LUOT_MAC_DINH
-    nguon = "mặc định trong script (không thấy cau_hinh_thu_thap.json)"
-    if os.path.exists(FILE_CAU_HINH):
-        try:
-            with open(FILE_CAU_HINH, encoding="utf-8") as f:
-                ch = json.load(f).get("cau_hinh", {})
-            if ch.get("tu_the"):
-                TU_THE = [(t[0], int(t[3]), [tuple(k) for k in t[4]] if t[4] else None) for t in ch["tu_the"]]
-            if ch.get("luot"):
-                SO_LUOT = len(ch["luot"])
-            C.update(ch.get("nguong", {}))
-            nguon = "cau_hinh_thu_thap.json" + ("" if ch.get("nguong") else " (bản cũ: ngưỡng dùng mặc định)")
-        except Exception as e:
-            nguon = f"mặc định (lỗi đọc cau_hinh_thu_thap.json: {e})"
-    return nguon
+    C = T.cau_hinh_thu()["nguong"]
+    TU_THE = [(ma, so, khoang) for ma, _, _, so, khoang in T.TU_THE]
+    SO_LUOT = len(T.LUOT)
+    if not os.path.exists(FILE_CAU_HINH):
+        return "thu_anh_nhe.py (cấu hình mặc định)"
+    try:
+        with open(FILE_CAU_HINH, encoding="utf-8") as f:
+            da_luu = json.load(f)["cau_hinh"]
+        tu_the = [(t[0], int(t[3]), t[4]) for t in da_luu.get("tu_the", [])]
+        so_luot = len(da_luu.get("luot", []))
+        nguong = {**C, **da_luu.get("nguong", {})}
+    except (OSError, ValueError, KeyError, TypeError, IndexError, AttributeError) as loi:
+        return f"thu_anh_nhe.py (không đọc được {FILE_CAU_HINH}: {loi})"
+    C, TU_THE, SO_LUOT = nguong, tu_the or TU_THE, so_luot or SO_LUOT
+    return FILE_CAU_HINH
 
 
 def ke_hoach():
@@ -144,102 +127,14 @@ def chi_so_ma():
 
 
 # =====================================================================
-# HÀM XỬ LÝ KHUÔN MẶT (giống hệt thu_anh.py)
+# HÀM XỬ LÝ KHUÔN MẶT (giống hệt thu_anh_nhe.py)
 # =====================================================================
-MO_HINH_3D = np.array([(0.0, 0.0, 0.0), (0.0, 330.0, 65.0), (-225.0, -170.0, 135.0),
-                       (225.0, -170.0, 135.0), (-150.0, 150.0, 125.0), (150.0, 150.0, 125.0)], dtype=np.float64)
-CHI_SO_PNP = [1, 152, 33, 263, 61, 291]
-MAU_ARCFACE_112 = np.array([[38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366],
-                            [41.5493, 92.3655], [70.7299, 92.2041]], dtype=np.float64)
-
-
-def tai_model():
-    if not os.path.exists(MODEL):
-        print("Đang tải model face_landmarker.task (~4 MB, chỉ lần đầu)...")
-        tam = MODEL + ".tmp"
-        try:
-            urllib.request.urlretrieve(MODEL_URL, tam)
-            os.replace(tam, MODEL)
-        except Exception as e:
-            raise SystemExit(f"Không tải được model ({e}). Tải thủ công:\n  {MODEL_URL}\nrồi đặt vào:\n  {MODEL}")
-    with open(MODEL, "rb") as f:
-        return f.read()
-
-
 def tao_landmarker(tin_cay=0.6, so_mat=2):
     return vision.FaceLandmarker.create_from_options(vision.FaceLandmarkerOptions(
-        base_options=mp_python.BaseOptions(model_asset_buffer=tai_model()),
+        base_options=mp_python.BaseOptions(model_asset_buffer=T.tai_model()),
         running_mode=vision.RunningMode.IMAGE, num_faces=so_mat,
         min_face_detection_confidence=tin_cay, min_face_presence_confidence=tin_cay,
         output_face_blendshapes=True))
-
-
-def goc_dau(diem, W, H):
-    f = float(max(W, H))
-    K = np.array([[f, 0, W / 2.0], [0, f, H / 2.0], [0, 0, 1]], dtype=np.float64)
-    p2 = diem[CHI_SO_PNP].astype(np.float64)
-    kc_mat = np.linalg.norm(p2[3] - p2[2])
-    z0 = f * 450.0 / max(kc_mat, 1.0)
-    t0 = np.array([[(p2[0, 0] - W / 2.0) * z0 / f], [(p2[0, 1] - H / 2.0) * z0 / f], [z0]])
-    ok, rvec, _ = cv2.solvePnP(MO_HINH_3D, p2, K, np.zeros(4), np.zeros((3, 1)), t0,
-                               True, cv2.SOLVEPNP_ITERATIVE)
-    if not ok:
-        return None
-    R, _ = cv2.Rodrigues(rvec)
-    huong = -R[:, 2]
-    if huong[2] > 0:
-        return None
-    yaw = math.degrees(math.atan2(huong[0], -huong[2]))
-    pitch = math.degrees(math.atan2(-huong[1], math.hypot(huong[0], huong[2])))
-    roll = math.degrees(math.atan2(R[1, 0], R[0, 0]))
-    return yaw, pitch, roll
-
-
-def diem_5(diem):
-    return np.array([(diem[33] + diem[133]) / 2, (diem[362] + diem[263]) / 2,
-                     diem[1], diem[61], diem[291]], dtype=np.float64)
-
-
-def bien_doi_tuong_dong(src, dst):
-    mu_s, mu_d = src.mean(0), dst.mean(0)
-    s_c, d_c = src - mu_s, dst - mu_d
-    var_s = (s_c ** 2).sum() / len(src)
-    U, S, Vt = np.linalg.svd(d_c.T @ s_c / len(src))
-    D = np.eye(2)
-    if np.linalg.det(U) * np.linalg.det(Vt) < 0:
-        D[1, 1] = -1
-    R = U @ D @ Vt
-    s = np.trace(np.diag(S) @ D) / var_s
-    t = mu_d - s * R @ mu_s
-    return np.hstack([s * R, t.reshape(2, 1)])
-
-
-def can_chinh_mat(anh, d5, kich_thuoc=112):
-    M = bien_doi_tuong_dong(np.asarray(d5, np.float64), MAU_ARCFACE_112 * (kich_thuoc / 112.0))
-    return cv2.warpAffine(anh, M, (kich_thuoc, kich_thuoc), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
-
-
-def thong_tin_tu_diem(diem, blendshapes, W, H):
-    """diem: mảng (478, 2) tọa độ pixel trên ảnh gốc."""
-    goc = goc_dau(diem, W, H)
-    if goc is None:
-        return None
-    bs = {c.category_name: c.score for c in blendshapes} if blendshapes else {}
-    x1, y1 = diem.min(0)
-    x2, y2 = diem.max(0)
-    return {"diem": diem, "khung": (x1, y1, x2, y2), "d5": diem_5(diem),
-            "yaw": goc[0], "pitch": goc[1], "roll": goc[2],
-            "cuoi": (bs.get("mouthSmileLeft", 0.0) + bs.get("mouthSmileRight", 0.0)) / 2,
-            "ha_mieng": bs.get("jawOpen", 0.0),
-            "nham": max(bs.get("eyeBlinkLeft", 0.0), bs.get("eyeBlinkRight", 0.0))}
-
-
-def chat_luong(xam):
-    return float(cv2.Laplacian(xam, cv2.CV_64F).var()), float(xam.mean()), float(xam.std())
-
-
-def chi_tieu_khoang(so_anh, so_khoang):
-    return [so_anh // so_khoang + (1 if i < so_anh % so_khoang else 0) for i in range(so_khoang)]
 
 
 def danh_gia_tu_the(ma, dyaw, dpitch, cuoi, ha_mieng, nham, g=0.0, s=0.0):
@@ -289,19 +184,6 @@ def doc_anh(p, co_mau=True):
         return cv2.imdecode(np.fromfile(p, dtype=np.uint8), cv2.IMREAD_COLOR if co_mau else cv2.IMREAD_GRAYSCALE)
     except Exception:
         return None
-
-
-def luu_anh(p, anh, duoi=".png", tham_so=None):
-    os.makedirs(os.path.dirname(p), exist_ok=True)
-    ok, buf = cv2.imencode(duoi, anh, tham_so or [])
-    if ok:
-        buf.tofile(p)
-    return ok
-
-
-def ve_chu(img, chu, x, y, mau=TRANG, co=0.5, day=1):
-    cv2.putText(img, chu, (x, y), cv2.FONT_HERSHEY_SIMPLEX, co, (0, 0, 0), day + 3, cv2.LINE_AA)
-    cv2.putText(img, chu, (x, y), cv2.FONT_HERSHEY_SIMPLEX, co, mau, day, cv2.LINE_AA)
 
 
 def doc_csv():
@@ -360,8 +242,8 @@ def kiem_tra_du(nhom, kq):
             if len(cua) > so_anh:
                 thua.append(f"L{l + 1} {ma} {len(cua)}/{so_anh}")
             if len(cua) < so_anh:
-                if khoang:          # chỉ rõ thiếu ở khoảng góc nào (thu_anh.py sẽ chụp bù đúng khoảng đó)
-                    ct = chi_tieu_khoang(so_anh, len(khoang))
+                if khoang:          # chỉ rõ thiếu ở khoảng góc nào (thu_anh_nhe.py sẽ chụp bù đúng khoảng đó)
+                    ct = T.chi_tieu_khoang(so_anh, len(khoang))
                     for i, (lo, hi) in enumerate(khoang):
                         n = sum(1 for d in cua if d.get("khoang_goc") == str(i))
                         if n < ct[i]:
@@ -369,7 +251,7 @@ def kiem_tra_du(nhom, kq):
                 else:
                     thieu.append(f"L{l + 1} {ma}: thiếu {so_anh - len(cua)}")
             elif khoang:            # đủ số ảnh nhưng phân bố góc khác cấu hình (chỉ khi đổi cấu hình giữa chừng)
-                ct = chi_tieu_khoang(so_anh, len(khoang))
+                ct = T.chi_tieu_khoang(so_anh, len(khoang))
                 thuc = [sum(1 for d in cua if d.get("khoang_goc") == str(i)) for i in range(len(khoang))]
                 if thuc != ct:
                     print(f"    ! {ten} L{l + 1} {ma}: phân bố khoảng góc {thuc} khác cấu hình {ct}")
@@ -391,7 +273,41 @@ def kiem_tra_du(nhom, kq):
 # =====================================================================
 # [2] FILE
 # =====================================================================
-def kiem_tra_file(dong, kq):
+def kiem_tra_ban_xam(dong, kq):
+    """Kiểm tra ảnh xám xuất riêng (như trên Git). Ảnh này không có số đo lúc thu."""
+    da_ghi = {(d["ten"], d["file"]) for d in dong}
+    ban_xam = []
+    for anh in sorted(Path(THU_MUC_XAM).glob("*/*.png")):
+        ten, goc = anh.parent.name, anh.stem
+        if (ten, goc) in da_ghi:
+            continue
+        if os.path.exists(duong_dan("goc", ten, goc)) or os.path.exists(duong_dan("mau", ten, goc)):
+            continue  # bản thu đầy đủ bị thiếu dòng metadata, kiểm tra ở nhóm file lạ
+        thong_tin = T.thong_tin_ten_anh(ten, goc)
+        luot, ma = "", ""
+        if thong_tin is None:
+            kq.them(goc, LOI, "tên ảnh không khớp thư mục người hoặc sai định dạng")
+        else:
+            _, luot, ma = thong_tin
+        try:
+            du_lieu = np.fromfile(anh, dtype=np.uint8)
+            xam = cv2.imdecode(du_lieu, cv2.IMREAD_UNCHANGED) if du_lieu.size else None
+        except (OSError, cv2.error):
+            xam = None
+        if xam is None or xam.shape != (100, 100) or xam.dtype != np.uint8:
+            kq.them(goc, LOI, "cần ảnh xám 100x100, 8 bit, đọc được")
+        ban_xam.append({"ten": ten, "file": goc, "luot": luot, "tu_the": ma,
+                        "pham_vi": "chỉ kiểm tra tên và ảnh xám"})
+    if ban_xam:
+        dem = collections.Counter(d["ten"] for d in ban_xam)
+        loi = sum(kq.trang_thai(d["file"]) == LOI for d in ban_xam)
+        print(f"  Bản chỉ có ảnh xám: {len(ban_xam)} ảnh, {len(dem)} người, {loi} ảnh lỗi")
+        for ten, so in sorted(dem.items()):
+            print(f"    {ten}: {so} ảnh")
+    return ban_xam
+
+
+def kiem_tra_file(dong, kq, ban_xam):
     print("\n[2] FILE")
     anh_xam, anh_mau = {}, {}
     dem_thieu = dem_hong = 0
@@ -420,7 +336,7 @@ def kiem_tra_file(dong, kq):
                 kq.them(f, LOI, "ảnh gốc hỏng")
                 dem_hong += 1
 
-    co_trong_csv = {(d["ten"], d["file"]) for d in dong}
+    da_biet = {(d["ten"], d["file"]) for d in dong + ban_xam}
     file_la = []
     for goc, duoi in ((THU_MUC_ANH_GOC, ".jpg"), (THU_MUC_MAU, ".png"), (THU_MUC_XAM, ".png")):
         if not os.path.isdir(goc):
@@ -431,7 +347,7 @@ def kiem_tra_file(dong, kq):
                 continue
             for fn in sorted(os.listdir(tm)):
                 ten_file, ext = os.path.splitext(fn)
-                if ext.lower() == duoi and (ten, ten_file) not in co_trong_csv:
+                if ext.lower() == duoi and (ten, ten_file) not in da_biet:
                     file_la.append(os.path.join(tm, fn))
     print(f"  {len(dong)} ảnh trong metadata | thiếu file: {dem_thieu} | file hỏng: {dem_hong} "
           f"| file lạ (không có trong metadata): {len(file_la)}")
@@ -541,7 +457,7 @@ def do_lai_mot_anh(lm, lm_phu, d, xam_luu, kq):
     khung_ghi = (v["x1"], v["y1"], v["x2"], v["y2"])
     goc_lon = abs(v["yaw_tuong_doi"]) >= GOC_LON_YAW or abs(v["pitch_tuong_doi"]) >= GOC_LON_PITCH
     cac_mat = phat_hien(lm, lm_phu, raw, khung_ghi)
-    infos = [i for i in (thong_tin_tu_diem(diem, bs, W, H) for diem, bs in cac_mat) if i is not None]
+    infos = [i for i in (T.thong_tin_tu_diem(diem, bs, W, H) for diem, bs in cac_mat) if i is not None]
     if not infos:
         if goc_lon:
             kq.them(f, CANH_BAO, "đo lại: không tìm thấy mặt (ảnh góc lớn – xem bằng mắt)")
@@ -568,7 +484,7 @@ def do_lai_mot_anh(lm, lm_phu, d, xam_luu, kq):
         if trang_thai == "khop":
             trang_thai = "canh_bao"
     if xam_luu is not None:
-        xam_moi = cv2.cvtColor(can_chinh_mat(raw, info["d5"], 100), cv2.COLOR_BGR2GRAY)
+        xam_moi = cv2.cvtColor(T.can_chinh_mat(raw, info["d5"], 100), cv2.COLOR_BGR2GRAY)
         khac = float(np.mean(cv2.absdiff(xam_moi, xam_luu)))
         if khac > LECH_CAN_CHINH:
             kq.them(f, CANH_BAO, f"đo lại: mặt cắt/căn chỉnh không khớp ảnh đã lưu (khác {khac:.0f})")
@@ -606,7 +522,7 @@ def kiem_tra_chat_luong(nhom, kq, anh_xam):
         ds_sx = [d for d in sorted(ds, key=so_thu_tu) if d["file"] in anh_xam]
         for d in ds_sx:
             f = d["file"]
-            net, sang, tp = chat_luong(anh_xam[f])
+            net, sang, tp = T.chat_luong(anh_xam[f])
             loi = []
             if net < C["NGUONG_NET"]:
                 loi.append(f"ảnh xám mờ ({net:.0f})")
@@ -677,7 +593,7 @@ def ghi_bao_cao_csv(dong, kq, file_la):
         w.writerow(["file", "ten", "luot", "tu_the", "trang_thai", "ly_do"])
         for d in dong:
             w.writerow([d["file"], d["ten"], d.get("luot"), d.get("tu_the"), kq.trang_thai(d["file"]),
-                        kq.ly_do(d["file"])])
+                        " | ".join(filter(None, (d.get("pham_vi"), kq.ly_do(d["file"]))))])
         for fl in file_la:
             w.writerow([os.path.relpath(fl, THU_MUC_DATA), "", "", "", "FILE_LA",
                         "có file nhưng không có trong metadata.csv"])
@@ -690,29 +606,29 @@ def ve_luoi(ten, ds, kq, anh_mau):
     so_cot = max(t[1] for t in TU_THE)
     luoi = np.full((70 + len(kh) * o + 10, nhan_w + so_cot * o + 10, 3), 28, np.uint8)
     dem = collections.Counter(kq.trang_thai(d["file"]) for d in ds)
-    ve_chu(luoi, f"{ten}: {len(ds)}/{tong_moi_nguoi()} anh  |  DAT {dem[DAT]}  CANH BAO {dem[CANH_BAO]}  "
+    T.ve_chu(luoi, f"{ten}: {len(ds)}/{tong_moi_nguoi()} anh  |  DAT {dem[DAT]}  CANH BAO {dem[CANH_BAO]}  "
                  f"LOI {dem[LOI]}", 10, 28, TRANG, 0.7, 2)
-    ve_chu(luoi, "Vien CAM = canh bao (xem bang mat) | Vien DO = loi (nen thu lai) | chi tiet: kiem_tra/bao_cao.csv",
+    T.ve_chu(luoi, "Vien CAM = canh bao (xem bang mat) | Vien DO = loi (nen thu lai) | chi tiet: kiem_tra/bao_cao.csv",
            10, 56, XAM, 0.5)
     for r, (l, b) in enumerate(kh):
         y = 70 + r * o
         ma, so_anh, _ = TU_THE[b]
         cua = sorted((d for d in ds if d.get("luot") == str(l + 1) and d.get("tu_the") == ma), key=so_thu_tu)
-        ve_chu(luoi, f"L{l + 1} {ma}", 10, y + 45, VANG, 0.6, 2)
-        ve_chu(luoi, f"{len(cua)}/{so_anh}", 10, y + 72, XANH if len(cua) == so_anh else DO, 0.55)
+        T.ve_chu(luoi, f"L{l + 1} {ma}", 10, y + 45, VANG, 0.6, 2)
+        T.ve_chu(luoi, f"{len(cua)}/{so_anh}", 10, y + 72, XANH if len(cua) == so_anh else DO, 0.55)
         for c, d in enumerate(cua[:so_cot]):
             x = nhan_w + c * o
             anh = anh_mau.get(d["file"])
             if anh is None:
                 anh = np.zeros((112, 112, 3), np.uint8)
-                ve_chu(anh, "THIEU", 20, 60, DO, 0.6, 2)
+                T.ve_chu(anh, "THIEU", 20, 60, DO, 0.6, 2)
             luoi[y + 5:y + o - 5, x + 5:x + o - 5] = cv2.resize(anh, (o - 10, o - 10))
             st = kq.trang_thai(d["file"])
             if st != DAT:
                 cv2.rectangle(luoi, (x + 2, y + 2), (x + o - 3, y + o - 3), DO if st == LOI else CAM, 4)
-            ve_chu(luoi, d.get("so", ""), x + 7, y + o - 9, TRANG, 0.38)
+            T.ve_chu(luoi, d.get("so", ""), x + 7, y + o - 9, TRANG, 0.38)
     p = os.path.join(THU_MUC_KQ, f"{ten}.jpg")
-    luu_anh(p, luoi, ".jpg", [cv2.IMWRITE_JPEG_QUALITY, 90])
+    T.luu_anh(p, luoi, ".jpg", [cv2.IMWRITE_JPEG_QUALITY, 90])
     return p
 
 
@@ -742,7 +658,7 @@ def ve_phan_bo_goc(dong):
         cv2.circle(anh, (le + kich + 30, le + 20 + 26 * i), 6, c, -1)
         cv2.putText(anh, ma, (le + kich + 45, le + 26 + 26 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 1)
     p = os.path.join(THU_MUC_KQ, "phan_bo_goc.png")
-    luu_anh(p, anh, ".png")
+    T.luu_anh(p, anh, ".png")
     return p
 
 
@@ -804,13 +720,12 @@ def tom_tat_theo_nguoi(dong, files):
 
 # =====================================================================
 def main():
-    cai_duong_dan(sys.argv[1] if len(sys.argv) > 1 else os.path.join(THU_MUC_CODE, "dataset"))
+    cai_duong_dan(sys.argv[1] if len(sys.argv) > 1 else T.THU_MUC_DATA)
     print("=" * 70)
     print(f" KIỂM TRA DỮ LIỆU: {THU_MUC_DATA}")
     print("=" * 70)
     if not os.path.isdir(THU_MUC_DATA):
-        raise SystemExit("Không thấy thư mục dataset. Đặt file này cạnh thư mục dataset "
-                         "hoặc chạy: python kiem_tra.py <đường_dẫn_dataset>")
+        raise SystemExit(f"Không thấy thư mục dữ liệu: {THU_MUC_DATA}")
     print(f"Ngưỡng kiểm tra lấy từ: {doc_cau_hinh()}")
     dong, cot = doc_csv()
     # dòng hỏng (bị cắt ngang khi tắt máy đột ngột): không có tên file / tên người -> bỏ ra
@@ -818,11 +733,18 @@ def main():
     dong = [d for d in dong if d.get("file") and d.get("ten")]
     if dong_hong:
         print(f"! Có {len(dong_hong)} dòng metadata bị hỏng/cắt ngang (sẽ bị bỏ nếu chọn chuyển ảnh lỗi).")
-    if not dong:
-        raise SystemExit("Chưa có metadata.csv hoặc chưa có ảnh nào.")
-    os.makedirs(THU_MUC_KQ, exist_ok=True)
-
     kq = KetQua()
+    ban_xam = kiem_tra_ban_xam(dong, kq)
+    if not dong and not ban_xam:
+        raise SystemExit(f"Không có dữ liệu kiểm tra ở {THU_MUC_DATA}. "
+                         "Cần metadata.csv của buổi thu hoặc bản xuất mat_xam_100/<tên>/*.png.")
+    os.makedirs(THU_MUC_KQ, exist_ok=True)
+    if not dong:
+        p_csv = ghi_bao_cao_csv(ban_xam, kq, [])
+        print("Bộ này chỉ có ảnh xám. Đo lại tư thế cần ảnh gốc và metadata của buổi thu.")
+        print(f"Báo cáo: {p_csv}")
+        return
+
     for f, n in collections.Counter(d.get("file") for d in dong).items():
         if n > 1:
             kq.them(f, LOI, f"tên file lặp {n} lần trong metadata")
@@ -831,13 +753,13 @@ def main():
         nhom[d.get("ten", "")].append(d)
 
     thieu = kiem_tra_du(nhom, kq)
-    anh_xam, anh_mau, file_la = kiem_tra_file(dong, kq)
+    anh_xam, anh_mau, file_la = kiem_tra_file(dong, kq, ban_xam)
     kiem_tra_luc_chup(dong, kq)
     kiem_tra_do_lai(dong, kq, anh_xam)
     kiem_tra_chat_luong(nhom, kq, anh_xam)
     kiem_tra_nhan(dong, kq, anh_xam)
 
-    p_csv = ghi_bao_cao_csv(dong, kq, file_la)
+    p_csv = ghi_bao_cao_csv(dong + ban_xam, kq, file_la)
     luoi = [ve_luoi(ten, ds, kq, anh_mau) for ten, ds in sorted(nhom.items())]
     p_goc = ve_phan_bo_goc(dong)
 
@@ -869,7 +791,7 @@ def main():
         except EOFError:
             pass
     if not loi and not file_la and not thieu:
-        print("\n=> DỮ LIỆU ĐẠT, không cần thu lại."
+        print("\n=> Các ảnh có metadata đạt kiểm tra, không cần thu lại."
               + (f" Có {len(canh_bao)} ảnh CẢNH BÁO: mở lưới ảnh xem bằng mắt (viền cam)." if canh_bao else ""))
         return
 
@@ -882,7 +804,7 @@ def main():
         print(f"  {len(file_la)} file lạ (không có trong metadata, thường do chương trình bị tắt ngang)")
 
     if loi or file_la:
-        print("\nChọn ảnh chuyển sang dataset/loai_bo để THU LẠI (ảnh được CHUYỂN, không bị xóa):")
+        print(f"\nChọn ảnh chuyển sang {THU_MUC_DATA}/loai_bo để THU LẠI (ảnh được CHUYỂN, không bị xóa):")
         print(f"  1 = chỉ ảnh LỖI ({len(loi)} ảnh) + file lạ   <- nên chọn")
         if canh_bao:
             print(f"  2 = ảnh LỖI + CẢNH BÁO ({len(loi) + len(canh_bao)} ảnh) + file lạ")
@@ -904,7 +826,7 @@ def main():
         ten_can = sorted(thieu)
 
     print("\nBƯỚC TIẾP THEO:")
-    print("  1. Chạy:  python thu_anh.py")
+    print("  1. Chạy:  python thu_anh_nhe.py")
     print(f"  2. Nhập đúng tên: {', '.join(ten_can)}  rồi gõ c -> chương trình chụp lại ĐÚNG phần còn thiếu")
     print("  3. Thu xong chạy lại:  python kiem_tra.py")
 

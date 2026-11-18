@@ -1,0 +1,9 @@
+{
+  "Mô hình tốt nhất (theo CV)": "Logistic Regression",
+  "Tham số": "{'C': 0.001}",
+  "Độ chính xác test (%)": "100.0",
+  "Số thành phần PCA": "33",
+  "Ngưỡng người lạ": "0.6",
+  "FAR / FRR tại ngưỡng (%)": "-",
+  "Người được điểm danh (trong lớp)": "bao, cao, hieu, lam, the_anh, tuan_tuanchoi"
+}

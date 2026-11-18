@@ -6,7 +6,8 @@
  Làm gì   : Quyết định ảnh nào dùng để HỌC (train), ảnh nào để KIỂM TRA (test).
             Mô hình chỉ được nhìn tập train; tập test để đánh giá khách quan ở bước 5.
  Cách chia:
-   - Ảnh tự thu (thu_anh.py): lượt 1 -> train, lượt 2 (chụp lại, đổi hướng ánh sáng) -> test
+   - Ảnh từ thu_anh_nhe.py có một lượt: chia theo từng người, khoảng 75% học, 25% kiểm tra.
+     Với dữ liệu có hai lượt: lượt 1 để học, lượt 2 để kiểm tra
      (ảnh liên tiếp trong 1 lượt rất giống nhau, chia ngẫu nhiên sẽ cho kết quả cao ảo).
    - Ảnh chụp tay, ảnh LFW: mỗi người 75% train / 25% test (ít nhất 1 ảnh test);
      ảnh trong thư mục con train/ hoặc test/ thì theo đúng thư mục đó.
@@ -41,7 +42,7 @@ def chia(df):
         tap[chi_dinh.index] = chi_dinh["tap_co_dinh"]
         nhom = nhom[nhom["tap_co_dinh"] == ""]               # phần còn lại chia theo quy tắc
         if nguon == "tu_thu" and {1, 2} <= set(nhom["luot"]):
-            # (b) ảnh thu_anh.py có đủ 2 lượt: lượt 1 -> train, lượt 2 -> test
+            # (b) nếu bộ ảnh tự thu có đủ 2 lượt: lượt 1 -> train, lượt 2 -> test
             tap[nhom.index[nhom["luot"] == 1]] = "train"
             tap[nhom.index[nhom["luot"] == 2]] = "test"
         elif len(nhom) == 1:

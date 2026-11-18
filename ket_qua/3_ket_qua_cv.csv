@@ -1,0 +1,8 @@
+﻿mo_hinh,tham_so,cv_%,cv_std_%,thoi_gian_s
+Logistic Regression,{'C': 0.001},100.0,0.0,1.4
+KNN,{'n_neighbors': 1},100.0,0.0,0.8
+SVM linear,{'C': 0.0001},100.0,0.0,0.6
+SVM poly,"{'C': 1, 'degree': 2}",100.0,0.0,0.5
+SVM rbf,"{'C': 1, 'gamma': 1e-05}",100.0,0.0,1.2
+Naive Bayes,{'var_smoothing': 1e-09},100.0,0.0,0.3
+Decision Tree,"{'criterion': 'gini', 'max_depth': 10}",92.54,6.59,0.7

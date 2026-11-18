@@ -3,16 +3,16 @@
  BƯỚC 4 – DỰ ĐOÁN TRÊN TẬP TEST
  Phụ trách: Thành viên 2 – Nguyễn Văn Lâm
 =====================================================================
- Làm gì   : Cho 7 mô hình đã huấn luyện dự đoán ảnh tập TEST (ảnh chúng chưa từng thấy),
-            đo thời gian dự đoán, lấy xác suất predict_proba của mô hình tốt nhất,
+ Làm gì   : Cho hồi quy logistic đã huấn luyện dự đoán ảnh tập TEST (ảnh chúng chưa từng thấy),
+            đo thời gian dự đoán, lấy xác suất predict_proba của hồi quy logistic,
             vẽ ảnh mặt kèm tên dự đoán để quan sát.
- Đầu vào  : mo_hinh/cac_mo_hinh.joblib (bước 3), dữ liệu bước 1-2
+ Đầu vào  : mo_hinh/hoi_quy_logistic.joblib (bước 3), dữ liệu bước 1-2
  Đầu ra   : ket_qua/du_doan.npz            kết quả dự đoán (dùng cho bước 5)
-            ket_qua/4_du_doan_tap_test.csv tên thật + tên dự đoán của từng mô hình cho từng ảnh
+            ket_qua/4_du_doan_tap_test.csv tên thật + tên dự đoán cho từng ảnh
             ket_qua/4_*.png                ảnh test kèm dự đoán, biểu đồ xác suất
  Các bước : 4.1 Nạp mô hình và tập test
-            4.2 Mỗi mô hình dự đoán tập test (predict) + đo thời gian
-            4.3 Mô hình tốt nhất: xác suất từng người (predict_proba), cả cho người lạ
+            4.2 Hồi quy logistic dự đoán tập test (predict) + đo thời gian
+            4.3 Hồi quy logistic: xác suất từng người (predict_proba), cả cho người lạ
             4.4 Lưu kết quả dự đoán
             4.5 Vẽ ảnh test kèm dự đoán + biểu đồ xác suất (như ví dụ AR Face)
  Chạy     : python buoc4_du_doan.py
@@ -35,7 +35,7 @@ rng = np.random.default_rng(C.RANDOM_STATE)      # bộ sinh số ngẫu nhiên 
 def ve_xac_suat(X, that, P, lop):
     """Như ví dụ AR Face trong bài giảng: mỗi ảnh mặt kèm thanh predict_proba của 5 người
     có xác suất cao nhất. Thanh trên cùng: xanh lá = đoán đúng, đỏ = đoán sai.
-    (Với SVM, người có xác suất cao nhất có thể khác kết quả predict ở rất ít ảnh.)"""
+    """
     hang = int(np.ceil(len(X) / 2))                          # mỗi hàng 2 ảnh
     fig, ax = plt.subplots(hang, 4, figsize=(13, 2.5 * hang), squeeze=False,
                            gridspec_kw={"width_ratios": [1, 1.7, 1, 1.7]})
@@ -70,64 +70,56 @@ def main():
     print("=" * 70)
 
     print("\n4.1 Nạp mô hình và tập test")
-    if not os.path.exists(C.FILE_CAC_MO_HINH):
+    if not os.path.exists(C.FILE_HOI_QUY_LOGISTIC):
         raise SystemExit("Chưa có mô hình. Chạy buoc3_huan_luyen.py trước.")
-    goi = joblib.load(C.FILE_CAC_MO_HINH)                   # nạp lại 7 mô hình đã lưu ở bước 3
-    mo_hinh, tot_nhat = goi["mo_hinh"], goi["tot_nhat"]
+    goi = joblib.load(C.FILE_HOI_QUY_LOGISTIC)                   # nạp lại mô hình đã lưu ở bước 3
+    ten = "Logistic Regression"
+    mh = goi["mo_hinh"]
     X, df = C.doc_du_lieu()
     te = (df["tap"] == "test").to_numpy()                    # mặt nạ True/False: ảnh test
     la = (df["tap"] == "nguoi_la").to_numpy()                # mặt nạ: ảnh người lạ
     X_test, y_test = X[te], df.loc[te, "ten"].to_numpy()
     if len(X_test) == 0:
         raise SystemExit("Tập test rỗng. Kiểm tra lại bước 2.")
-    print(f"  {len(mo_hinh)} mô hình | test: {len(X_test)} ảnh người quen | "
+    print(f"  {ten} | test: {len(X_test)} ảnh người quen | "
           f"người lạ: {int(la.sum())} ảnh")
 
-    print("\n4.2 Mỗi mô hình dự đoán tập test")
-    du_doan, ms = {}, {}
-    for ten, mh in mo_hinh.items():
-        t0 = time.perf_counter()
-        du_doan[ten] = mh.predict(X_test)                    # predict: trả về tên người dự đoán
-        ms[ten] = (time.perf_counter() - t0) / len(X_test) * 1000      # mili giây / ảnh
-        acc = accuracy_score(y_test, du_doan[ten])           # tỉ lệ ảnh đoán đúng
-        print(f"  {ten:<20} độ chính xác {acc * 100:5.1f}% | {ms[ten]:.2f} ms/ảnh")
+    print("\n4.2 Hồi quy logistic dự đoán tập test")
+    bat_dau = time.perf_counter()
+    du_doan = mh.predict(X_test)
+    ms = (time.perf_counter() - bat_dau) * 1000 / len(X_test)
+    acc = accuracy_score(y_test, du_doan)
+    print(f"  Độ chính xác {acc:.1%} | {ms:.2f} ms/ảnh")
 
-    print(f"\n4.3 Xác suất của mô hình tốt nhất ({tot_nhat})")
-    mh = mo_hinh[tot_nhat]
+    print("\n4.3 Xác suất của hồi quy logistic")
     lop = np.array(mh.classes_)                              # thứ tự người ứng với các cột xác suất
     P_test = mh.predict_proba(X_test)                        # xác suất thuộc từng người (tổng = 1)
     P_la = mh.predict_proba(X[la]) if la.any() else np.zeros((0, len(lop)))
-    # xác suất của chính người được đoán (với SVM, predict và predict_proba có thể lệch nhau)
-    cot = {t: j for j, t in enumerate(lop)}                  # tên người -> số thứ tự cột
-    p_doan = np.array([P_test[i, cot[d]] for i, d in enumerate(du_doan[tot_nhat])])
+    p_doan = P_test.max(axis=1)
     print(f"  Xác suất cao nhất trung bình: người quen {P_test.max(1).mean():.2f}"
           + (f" | người lạ {P_la.max(1).mean():.2f}" if len(P_la) else ""))
 
     print("\n4.4 Lưu kết quả dự đoán")
     os.makedirs(C.KET_QUA, exist_ok=True)
-    ten_mh = list(mo_hinh)
-    # .astype(str): lưu chữ dạng chuỗi thường (không cần pickle khi đọc lại ở bước 5)
-    np.savez(C.FILE_DU_DOAN, ten_mo_hinh=np.array(ten_mh, dtype=str),
-             du_doan=np.array([du_doan[t] for t in ten_mh]).astype(str),
-             ms_moi_anh=np.array([ms[t] for t in ten_mh]), tot_nhat=np.array(tot_nhat, dtype=str),
+    np.savez(C.FILE_DU_DOAN, ten_mo_hinh=ten,
+             du_doan=du_doan.astype(str), ms_moi_anh=ms,
              lop=lop.astype(str), y_test=y_test.astype(str),
              file_test=df.loc[te, "file"].to_numpy().astype(str),
              P_test=P_test, P_la=P_la, file_la=df.loc[la, "file"].to_numpy().astype(str))
     bang = pd.DataFrame({"file": df.loc[te, "file"].to_numpy(), "nguoi_that": y_test})
-    for t in ten_mh:
-        bang[t] = du_doan[t]                                 # mỗi mô hình 1 cột tên dự đoán
-    bang["xac_suat_" + tot_nhat] = p_doan.round(3)
+    bang[ten] = du_doan
+    bang["xac_suat_" + ten] = p_doan.round(3)
     bang.to_csv(os.path.join(C.KET_QUA, "4_du_doan_tap_test.csv"), index=False,
                 encoding="utf-8-sig")                        # utf-8-sig: Excel đọc đúng tiếng Việt
     print("  -> ket_qua/du_doan.npz\n  -> ket_qua/4_du_doan_tap_test.csv")
 
     print("\n4.5 Vẽ ảnh test kèm dự đoán")
     chon = rng.choice(len(X_test), size=min(24, len(X_test)), replace=False)   # 24 ảnh ngẫu nhiên
-    doan = du_doan[tot_nhat][chon]
+    doan = du_doan[chon]
     C.ve_luoi_anh(X_test[chon], [f"Thật: {C.rut_gon(t)}" for t in y_test[chon]],
                   [f"Đoán: {C.rut_gon(d)} ({p:.0%})" for d, p in zip(doan, p_doan[chon])],
                   doan == y_test[chon], "4_du_doan_tap_test.png",
-                  f"Dự đoán trên tập test – {tot_nhat} (xanh: đúng, đỏ: sai)")
+                  f"Dự đoán trên tập test – {ten} (xanh: đúng, đỏ: sai)")
     # biểu đồ xác suất: 5 ảnh test đầu trong số ảnh vừa chọn + 1 ảnh người lạ
     mau = chon[:5]
     X_m, y_m, P_m = X_test[mau], list(y_test[mau]), P_test[mau]

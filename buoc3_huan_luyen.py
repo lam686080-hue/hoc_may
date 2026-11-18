@@ -2,44 +2,23 @@
 =====================================================================
  BƯỚC 3 – HUẤN LUYỆN MÔ HÌNH
  Phụ trách: 3.1 – 3.2 (PCA)         Thành viên 1 – Bùi Trung Hiếu
-            3.3 – 3.5 (7 mô hình)   Thành viên 2 – Nguyễn Văn Lâm
+            3.3 – 3.5 (hồi quy logistic)   Thành viên 2 – Nguyễn Văn Lâm
 =====================================================================
- Làm gì   : Giảm chiều ảnh bằng PCA rồi huấn luyện 7 mô hình của học phần,
-            mỗi mô hình tự chọn tham số tốt nhất bằng cross-validation 5-fold
-            TRÊN TẬP TRAIN (tập test không được dùng ở bước này).
- Mỗi mô hình là 1 Pipeline 3 khâu:
-     StandardScaler (chuẩn hóa)  ->  PCA (giảm 10.000 chiều)  ->  bộ phân lớp
- 7 bộ phân lớp: Logistic Regression, KNN, SVM linear / poly / rbf, Naive Bayes, Decision Tree
- Đầu vào  : dataset/du_lieu_anh.npz, dataset/danh_sach.csv (bước 1, 2)
- Đầu ra   : mo_hinh/cac_mo_hinh.joblib   7 mô hình đã huấn luyện
-            ket_qua/3_ket_qua_cv.csv      tham số tốt nhất + độ chính xác CV từng mô hình
-            ket_qua/3_*.png               biểu đồ PCA và kết quả huấn luyện
- Các bước : 3.1 Lấy dữ liệu train
-            3.2 Phân tích PCA: chọn số thành phần k giữ 95% phương sai
-            3.3 Tạo 7 mô hình + lưới tham số
-            3.4 Huấn luyện + chọn tham số bằng GridSearchCV (5-fold)
-            3.5 Vẽ kết quả, lưu mô hình
- Chạy     : python buoc3_huan_luyen.py
-=====================================================================
+ Dùng PCA để giảm chiều và chọn tham số C của hồi quy logistic trên tập học.
+ Đầu ra: mô hình đã học và kết quả kiểm tra chéo.
 """
 import os
 import time
-import shutil
 import tempfile
 
 import numpy as np
 import pandas as pd
 import joblib                                                   # lưu / nạp mô hình ra file
-import seaborn as sns                                           # vẽ bản đồ nhiệt (heatmap)
 from sklearn.preprocessing import StandardScaler                # chuẩn hóa z = (x - mean) / std
 from sklearn.decomposition import PCA                           # phân tích thành phần chính
 from sklearn.pipeline import Pipeline                           # ghép nhiều khâu thành 1 mô hình
 from sklearn.model_selection import GridSearchCV, StratifiedKFold
 from sklearn.linear_model import LogisticRegression
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.svm import SVC
-from sklearn.naive_bayes import GaussianNB
-from sklearn.tree import DecisionTreeClassifier, plot_tree
 import chung as C
 from chung import plt
 
@@ -79,7 +58,7 @@ def phan_tich_pca(X_train, y_train):
     ax = ax.ravel()
     ax[0].imshow(scaler.mean_.reshape(C.KICH_THUOC, C.KICH_THUOC), cmap="gray")
     ax[0].set_title("Mặt trung bình", fontsize=9)
-    for i in range(15):
+    for i in range(min(15, len(pca.components_))):
         ax[i + 1].imshow(pca.components_[i].reshape(C.KICH_THUOC, C.KICH_THUOC), cmap="gray")
         ax[i + 1].set_title(f"PC{i + 1} ({ti_le[i] * 100:.1f}%)", fontsize=8)
     for a in ax:
@@ -121,120 +100,30 @@ def phan_tich_pca(X_train, y_train):
     return k
 
 
-# ============ 3.3 TẠO 7 MÔ HÌNH  (Thành viên 2 – Nguyễn Văn Lâm) ============
-def tao_mo_hinh(k, bo_nho):
-    """Trả về 7 mô hình dạng {tên: (Pipeline, lưới tham số cần thử)}.
-    Mỗi Pipeline = StandardScaler -> PCA(k) -> bộ phân lớp. Pipeline bảo đảm StandardScaler
-    và PCA chỉ học từ dữ liệu train (của từng fold khi cross-validation)."""
-    def tao_pipeline(bo_phan_lop):
-        return Pipeline([
-            ("chuan_hoa", StandardScaler()),                            # khâu 1: chuẩn hóa
-            ("pca", PCA(n_components=k, random_state=C.RANDOM_STATE)),  # khâu 2: giảm chiều
-            ("model", bo_phan_lop),                                     # khâu 3: phân lớp
-        ], memory=bo_nho)          # nhớ kết quả khâu 1, 2 -> mô hình sau không tính lại PCA
-    rs = C.RANDOM_STATE
-    # class_weight="balanced": người có ít ảnh được tăng trọng số để không bị lấn át
-    # probability=True: SVM tính được xác suất predict_proba (cần cho bước 4, 5)
-    # gamma SVM rbf: sau chuẩn hóa + PCA, mặc định "scale" ≈ 1/9500 ≈ 1e-4 -> thử quanh đó
-    # tên tham số trong lưới: "model__C" = tham số C của khâu tên "model"
-    return {
-        "Logistic Regression": (
-            tao_pipeline(LogisticRegression(max_iter=5000, class_weight="balanced")),
-            {"model__C": [0.001, 0.01, 0.1, 1]}),
-        "KNN": (
-            tao_pipeline(KNeighborsClassifier(weights="distance")),
-            {"model__n_neighbors": [1, 3, 5, 7]}),
-        "SVM linear": (
-            tao_pipeline(SVC(kernel="linear", probability=True, class_weight="balanced",
-                             random_state=rs)),
-            {"model__C": [0.0001, 0.001, 0.01, 0.1]}),
-        "SVM poly": (
-            tao_pipeline(SVC(kernel="poly", gamma="scale", probability=True,
-                             class_weight="balanced", random_state=rs)),
-            {"model__degree": [2, 3], "model__C": [1, 10]}),
-        "SVM rbf": (
-            tao_pipeline(SVC(kernel="rbf", probability=True, class_weight="balanced",
-                             random_state=rs)),
-            {"model__C": [1, 10, 100], "model__gamma": [1e-5, 1e-4, 1e-3]}),
-        "Naive Bayes": (
-            tao_pipeline(GaussianNB()),
-            {"model__var_smoothing": [1e-9, 1e-2]}),
-        "Decision Tree": (
-            tao_pipeline(DecisionTreeClassifier(random_state=rs)),
-            {"model__criterion": ["gini", "entropy"], "model__max_depth": [10, 20, None]}),
-    }
-
-
-# ============ 3.4 HUẤN LUYỆN + GRIDSEARCHCV  (Thành viên 2 – Nguyễn Văn Lâm) ============
 def huan_luyen(X_train, y_train, k):
-    """Huấn luyện 7 mô hình. Với mỗi mô hình, GridSearchCV thử mọi bộ tham số trong lưới:
-    chia tập train thành 5 phần, lần lượt lấy 1 phần để kiểm tra, 4 phần để học -> độ chính
-    xác trung bình. Chọn bộ tốt nhất rồi học lại trên cả tập train."""
-    bo_nho = tempfile.mkdtemp(prefix="cache_pca_")           # thư mục tạm để Pipeline nhớ PCA
-    # chia 5 phần (xáo trộn trước), mỗi phần giữ đúng tỉ lệ ảnh của từng người
+    """Chọn mức điều chuẩn C cho hồi quy logistic bằng kiểm tra chéo."""
     cv = StratifiedKFold(SO_FOLD, shuffle=True, random_state=C.RANDOM_STATE)
-    mo_hinh, bang, luoi_rbf = {}, [], None
-    try:
-        for ten, (pipe, luoi) in tao_mo_hinh(k, bo_nho).items():
-            t0 = time.time()
-            # n_jobs=1: chạy lần lượt từng lần thử (Jetson ít RAM, dùng chung bộ nhớ PCA)
-            gs = GridSearchCV(pipe, luoi, cv=cv, scoring="accuracy", n_jobs=1)
-            gs.fit(X_train, y_train)                                 # thử hết lưới tham số
-            mo_hinh[ten] = gs.best_estimator_.set_params(memory=None)  # bộ tham số tốt nhất
-            tham_so = {p.replace("model__", ""): v for p, v in gs.best_params_.items()}
-            do_lech = gs.cv_results_["std_test_score"][gs.best_index_]  # độ lệch chuẩn giữa 5 fold
-            bang.append({"mo_hinh": ten, "tham_so": str(tham_so),
-                         "cv_%": round(gs.best_score_ * 100, 2),        # độ chính xác CV trung bình
-                         "cv_std_%": round(do_lech * 100, 2),
-                         "thoi_gian_s": round(time.time() - t0, 1)})
-            if ten == "SVM rbf":                               # giữ kết quả mọi cặp (C, gamma)
-                luoi_rbf = pd.DataFrame(gs.cv_results_["params"])
-                luoi_rbf["cv"] = gs.cv_results_["mean_test_score"]
-            b = bang[-1]
-            print(f"  {ten:<20} CV {b['cv_%']:5.1f}% ± {b['cv_std_%']:4.1f} | {b['tham_so']} "
-                  f"| {b['thoi_gian_s']}s")
-    finally:
-        shutil.rmtree(bo_nho, ignore_errors=True)             # xóa thư mục tạm
-    return mo_hinh, pd.DataFrame(bang), luoi_rbf
+    bat_dau = time.perf_counter()
+    with tempfile.TemporaryDirectory(prefix="cache_pca_") as bo_nho:
+        pipeline = Pipeline([
+            ("chuan_hoa", StandardScaler()),
+            ("pca", PCA(n_components=k, random_state=C.RANDOM_STATE)),
+            ("model", LogisticRegression(max_iter=5000, class_weight="balanced")),
+        ], memory=bo_nho)
+        tim = GridSearchCV(pipeline, {"model__C": [0.001, 0.01, 0.1, 1]},
+                           cv=cv, scoring="accuracy", n_jobs=1)
+        tim.fit(X_train, y_train)
+        mh = tim.best_estimator_.set_params(memory=None)
+    bang = pd.DataFrame([{
+        "mo_hinh": "Logistic Regression", "tham_so": str({"C": tim.best_params_["model__C"]}),
+        "cv_%": round(100 * tim.best_score_, 2),
+        "cv_std_%": round(100 * tim.cv_results_["std_test_score"][tim.best_index_], 2),
+        "thoi_gian_s": round(time.perf_counter() - bat_dau, 1),
+    }])
+    print(bang.to_string(index=False))
+    return mh, bang
 
 
-# ============ 3.5 VẼ KẾT QUẢ  (Thành viên 2 – Nguyễn Văn Lâm) ============
-def ve_ket_qua(bang, luoi_rbf, mo_hinh):
-    # (a) Độ chính xác CV (cột) ± độ lệch chuẩn giữa 5 fold (thanh sai số)
-    plt.figure(figsize=(11, 4.6))
-    tot = bang["cv_%"].max()
-    mau = ["tomato" if v == tot else "steelblue" for v in bang["cv_%"]]        # đỏ = tốt nhất
-    cot = plt.bar(bang["mo_hinh"], bang["cv_%"], yerr=bang["cv_std_%"], capsize=5,
-                  edgecolor="black", color=mau)
-    plt.bar_label(cot, fmt="%.1f%%", label_type="center", color="white", fontweight="bold")
-    plt.ylim(0, 105)
-    plt.ylabel("Độ chính xác CV (%)")
-    plt.xticks(rotation=15)
-    plt.title(f"Độ chính xác {SO_FOLD}-fold cross-validation trên tập train (đỏ = tốt nhất)")
-    C.luu_hinh("3_cv_cac_mo_hinh.png")
-
-    # (b) SVM rbf: độ chính xác CV theo C và gamma (bản đồ nhiệt)
-    if luoi_rbf is not None:
-        # pivot: bảng dài (C, gamma, cv) -> ma trận hàng = C, cột = gamma
-        M = luoi_rbf.pivot(index="model__C", columns="model__gamma", values="cv") * 100
-        plt.figure(figsize=(6, 4))
-        sns.heatmap(M, annot=True, fmt=".1f", cmap="coolwarm")
-        plt.xlabel("gamma")
-        plt.ylabel("C")
-        plt.title("SVM rbf: độ chính xác CV (%) theo C và gamma")
-        C.luu_hinh("3_svm_rbf_C_gamma.png")
-
-    # (c) 3 tầng đầu của cây quyết định (plot_tree như bài giảng)
-    cay = mo_hinh["Decision Tree"].named_steps["model"]
-    plt.figure(figsize=(22, 8))
-    plot_tree(cay, max_depth=2, filled=True, fontsize=8, precision=2,
-              feature_names=[f"PC{i + 1}" for i in range(cay.n_features_in_)],
-              class_names=[C.rut_gon(c) for c in cay.classes_])
-    plt.title(f"Decision Tree – 3 tầng đầu (độ sâu thật = {cay.get_depth()})")
-    C.luu_hinh("3_cay_quyet_dinh.png")
-
-
-# =====================================================================
 def main():
     print("=" * 70)
     print(" BƯỚC 3 – HUẤN LUYỆN MÔ HÌNH")
@@ -259,21 +148,20 @@ def main():
     k = phan_tich_pca(X_train, y_train)
 
     # ---------------- 3.3 – 3.5: Thành viên 2 (Nguyễn Văn Lâm) ----------------
-    print(f"\n3.3 + 3.4 Huấn luyện 7 mô hình, chọn tham số bằng GridSearchCV {SO_FOLD}-fold")
-    mo_hinh, bang, luoi_rbf = huan_luyen(X_train, y_train, k)
+    print(f"\n3.3 + 3.4 Huấn luyện hồi quy logistic, chọn tham số bằng GridSearchCV {SO_FOLD}-fold")
+    mh, bang = huan_luyen(X_train, y_train, k)
 
-    print("\n3.5 Vẽ kết quả và lưu")
-    ve_ket_qua(bang, luoi_rbf, mo_hinh)
-    tot_nhat = bang.loc[bang["cv_%"].idxmax(), "mo_hinh"]     # chọn theo CV, KHÔNG theo tập test
+    print("\n3.5 Lưu kết quả")
+    ten_mo_hinh = "Logistic Regression"
     os.makedirs(C.MO_HINH, exist_ok=True)
     # người trong lớp (ảnh tự thu / chụp tay, không phải LFW): được hiện tên + điểm danh ở bước 6
     trong_lop = df["nguon"].isin(C.TRONG_LOP) & (df["vai_tro"] == "biet")
     nguoi_diem_danh = sorted(df.loc[trong_lop, "ten"].unique())
-    joblib.dump({"mo_hinh": mo_hinh, "tot_nhat": tot_nhat, "so_thanh_phan_pca": k,
-                 "nguoi_diem_danh": nguoi_diem_danh}, C.FILE_CAC_MO_HINH, compress=3)
+    joblib.dump({"mo_hinh": mh, "ten_mo_hinh": ten_mo_hinh, "so_thanh_phan_pca": k,
+                 "nguoi_diem_danh": nguoi_diem_danh}, C.FILE_HOI_QUY_LOGISTIC, compress=3)
     bang.to_csv(C.FILE_KET_QUA_CV, index=False, encoding="utf-8-sig")
-    print(f"  Mô hình tốt nhất theo cross-validation: {tot_nhat}")
-    print("  -> mo_hinh/cac_mo_hinh.joblib\n  -> ket_qua/3_ket_qua_cv.csv")
+    print(f"  Mô hình đã huấn luyện: {ten_mo_hinh}")
+    print("  -> mo_hinh/hoi_quy_logistic.joblib\n  -> ket_qua/3_ket_qua_cv.csv")
     print("\nXong bước 3. Tiếp theo: python buoc4_du_doan.py")
 
 
