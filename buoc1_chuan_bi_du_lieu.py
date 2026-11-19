@@ -3,24 +3,20 @@
  BƯỚC 1 – CHUẨN BỊ DỮ LIỆU
  Phụ trách: Thành viên 1 – Bùi Trung Hiếu
 =====================================================================
- Làm gì   : Gom ảnh mặt từ 3 nguồn, đưa về CÙNG một dạng (căn chỉnh 5 điểm, xám 100x100,
+ Làm gì   : Gom ảnh mặt từ ảnh tự thu và LFW, đưa về CÙNG một dạng (căn chỉnh 5 điểm, xám 100x100,
             lọc Gaussian + CLAHE), thống kê + vẽ biểu đồ, lưu lại cho các bước sau.
- Đầu vào  : dataset_nhe/mat_xam_100/<Tên>/*.png    ảnh nhóm tự thu bằng thu_anh_nhe.py (đã căn chỉnh)
-            dataset/anh_chup_tay/<Tên>/*.jpg   ảnh chụp tay bằng điện thoại (ảnh gốc)
-                (ảnh trong <Tên>/train/ hoặc <Tên>/test/: chỉ dùng để train / chỉ để test)
+ Đầu vào  : dataset/mat_xam_100/<Tên>/*.png    ảnh nhóm tự thu bằng thu_anh.py (đã căn chỉnh)
             Bộ LFW (tải nếu chưa có, ~230 MB)
  Đầu ra   : dataset/du_lieu_anh.npz   tất cả ảnh đã tiền xử lý (N x 100 x 100)
             dataset/danh_sach.csv     mỗi dòng 1 ảnh: file, tên, nguồn, lượt, tư thế, vai trò
-            dataset/chup_tay_100/     ảnh chụp tay đã căn chỉnh + bao_cao.csv
             ket_qua/1_*.png           biểu đồ cho báo cáo
- Các bước : 1.1 Đọc ảnh tự thu
-            1.2 Ảnh chụp tay: căn chỉnh ảnh mới, đọc; người quá ít ảnh -> người lạ
-            1.3 Chuẩn bị ảnh LFW (tải + căn chỉnh giống hệt ảnh tự thu)
-            1.4 Tiền xử lý: lọc Gaussian + cân bằng sáng CLAHE
-            1.5 Thống kê và trực quan hóa
-            1.6 Lưu dữ liệu
+ Các bước : 1.1 Đọc ảnh tự thu và gán vai trò
+            1.2 Chuẩn bị ảnh LFW (tải + căn chỉnh giống hệt ảnh tự thu)
+            1.3 Tiền xử lý: lọc Gaussian + cân bằng sáng CLAHE
+            1.4 Thống kê và trực quan hóa
+            1.5 Lưu dữ liệu
  Chạy     : python buoc1_chuan_bi_du_lieu.py
-            python buoc1_chuan_bi_du_lieu.py --chuan-bi   (chỉ làm 1.2 + 1.3, trên laptop)
+            python buoc1_chuan_bi_du_lieu.py --chuan-bi   (chỉ chuẩn bị bộ LFW đã căn chỉnh)
 =====================================================================
 """
 import os
@@ -39,18 +35,15 @@ LFW_SO_NGUOI_LA = 30          # 30 người LFW khác làm "người lạ" (ch�
 LFW_ANH_MOI_NGUOI_LA = 5      # mỗi người lạ lấy 5 ảnh
 SO_ANH_TOI_THIEU = 5          # người trong lớp có < 5 ảnh: chưa đủ để học -> làm người lạ (test)
 CHI_LAM_NGUOI_LA = []         # tên người chỉ dùng làm người lạ, vd ["Tran_Van_A"]
-DUOI_ANH = (".jpg", ".jpeg", ".png", ".bmp", ".webp")   # loại ảnh chụp tay đọc được
-KC_MAT_TOI_THIEU = 20         # ảnh chụp tay: 2 mắt cách nhau < 20 px (mặt quá nhỏ) -> bỏ
-KC_MAT_CHUAN = 70             # mặt quá to thì thu nhỏ ảnh để 2 mắt cách nhau ~70 px (như camera)
 
 
 # ======================= 1.1 ĐỌC ẢNH TỰ THU =======================
 def doc_anh_tu_thu():
-    """Tên ảnh do thu_anh_nhe.py đặt: <Tên>_<số>_L<lượt>_<tư thế>.png -> biết người, lượt, tư thế.
+    """Tên ảnh do thu_anh.py đặt: <Tên>_<số>_L<lượt>_<tư thế>.png -> biết người, lượt, tư thế.
     Ảnh bị kiem_tra.py đánh dấu LOI thì bỏ qua."""
     thu_muc_anh = C.THU_MUC_TU_THU
-    print(f"  Đọc ảnh thu nhẹ tại: {thu_muc_anh}")
-    p_loi = os.path.join(C.DATASET_NHE, "kiem_tra", "bao_cao.csv")
+    print(f"  Đọc ảnh tự thu tại: {thu_muc_anh}")
+    p_loi = os.path.join(C.DATASET, "kiem_tra", "bao_cao.csv")
     loi = set()
     if os.path.exists(p_loi):
         bc = pd.read_csv(p_loi, encoding="utf-8-sig", dtype=str)
@@ -60,22 +53,35 @@ def doc_anh_tu_thu():
         goc = os.path.splitext(os.path.basename(p))[0]
         phan = goc.rsplit("_", 3)                       # tách 3 dấu "_" cuối: [tên, số, L1, tư thế]
         if len(phan) < 4 or phan[2][:1] != "L" or not phan[2][1:].isdigit():
-            sai_ten += 1                                # không phải ảnh do thu_anh_nhe.py chụp
+            sai_ten += 1                                # không phải ảnh do thu_anh.py chụp
         elif goc not in loi:
             dong.append({"duong_dan": p, "file": goc, "ten": os.path.basename(os.path.dirname(p)),
                          "nguon": "tu_thu", "luot": int(phan[2][1:]), "tu_the": phan[3],
-                         "vai_tro": "biet", "tap_co_dinh": ""})
+                         "vai_tro": "biet"})
     print(f"  Ảnh tự thu: {len(dong)} ảnh ({len(loi)} ảnh LOI bị bỏ qua)")
     if sai_ten:
-        print(f"  ! Bỏ qua {sai_ten} file không đúng tên của thu_anh_nhe.py "
-              "(ảnh chụp tay hãy để trong dataset/anh_chup_tay/<Tên>/)")
+        print(f"  ! Bỏ qua {sai_ten} file không đúng tên của thu_anh.py")
     return dong
 
 
-# ======================= 1.2 ẢNH CHỤP TAY =======================
+def gan_vai_tro(dong):
+    """Người trong lớp có < SO_ANH_TOI_THIEU ảnh (tự thu) chưa đủ để học
+    -> chỉ dùng làm NGƯỜI LẠ (test). Người trong CHI_LAM_NGUOI_LA cũng vậy."""
+    dem = pd.Series([d["ten"] for d in dong], dtype=str).value_counts()
+    it_anh = sorted(t for t, n in dem.items() if n < SO_ANH_TOI_THIEU)
+    for d in dong:
+        if d["ten"] in it_anh or d["ten"] in CHI_LAM_NGUOI_LA:
+            d["vai_tro"] = "nguoi_la"
+    if it_anh:
+        print(f"  ! Chưa đủ {SO_ANH_TOI_THIEU} ảnh -> tạm làm người lạ: "
+              + ", ".join(f"{t} ({dem[t]})" for t in it_anh))
+    return dong
+
+
+# ======================= 1.2 CHUẨN BỊ ẢNH LFW =======================
 def tao_bo_tim_mat(so_mat):
     """MediaPipe Face Landmarker chế độ IMAGE (ảnh tĩnh): tìm mặt + 478 điểm mốc."""
-    import thu_anh_nhe as T
+    import thu_anh as T
     from mediapipe.tasks import python as mp_python
     from mediapipe.tasks.python import vision
     return vision.FaceLandmarker.create_from_options(vision.FaceLandmarkerOptions(
@@ -97,107 +103,6 @@ def tim_mat(lm, bgr):
     return [np.array([(p.x * W, p.y * H) for p in m]) for m in kq.face_landmarks]
 
 
-def can_chinh_1_anh(lm, nguon, dich):
-    """1 ảnh điện thoại -> ảnh mặt xám 100x100 căn chỉnh 5 điểm. Trả về kết quả (OK hoặc lỗi)."""
-    import thu_anh_nhe as T
-    from PIL import Image, ImageOps                     # Pillow: đọc ảnh + xoay đúng chiều (EXIF)
-    try:
-        with Image.open(nguon) as im:
-            rgb = np.asarray(ImageOps.exif_transpose(im).convert("RGB"))
-    except Exception:
-        return "KHONG_DOC_DUOC"                         # file hỏng hoặc định dạng lạ (HEIC…)
-    bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-    cac_mat = tim_mat(lm, bgr)
-    if not cac_mat:
-        return "KHONG_THAY_MAT"
-    diem = max(cac_mat, key=lambda d: np.ptp(d[:, 0]) * np.ptp(d[:, 1]))   # nhiều mặt: lấy mặt to
-    d5 = T.diem_5(diem)                                 # 5 điểm: 2 mắt, mũi, 2 khóe miệng
-    kc_mat = np.linalg.norm(d5[1] - d5[0])              # khoảng cách 2 mắt (pixel)
-    if kc_mat < KC_MAT_TOI_THIEU:
-        return "MAT_NHO"
-    if kc_mat > KC_MAT_CHUAN:                           # mặt quá to: thu nhỏ ảnh (đỡ răng cưa)
-        k = KC_MAT_CHUAN / kc_mat
-        bgr, d5 = cv2.resize(bgr, None, fx=k, fy=k, interpolation=cv2.INTER_AREA), d5 * k
-    mat = T.can_chinh_mat(bgr, d5, C.KICH_THUOC)        # căn chỉnh giống hệt ảnh tự thu
-    C.luu_png(dich, cv2.cvtColor(mat, cv2.COLOR_BGR2GRAY))
-    return "NHIEU_MAT" if len(cac_mat) > 1 else "OK"
-
-
-def can_chinh_anh_chup_tay():
-    """dataset/anh_chup_tay/<Tên>/[train|test/]ảnh -> dataset/chup_tay_100/<Tên>/[train|test/]
-    Chỉ xử lý ảnh chưa căn chỉnh (hoặc vừa sửa); kết quả ghi vào chup_tay_100/bao_cao.csv."""
-    if not os.path.isdir(C.THU_MUC_CHUP_TAY):
-        print("  (máy này không có ảnh gốc dataset/anh_chup_tay – dùng ảnh đã căn chỉnh nếu có)")
-        return
-    import thu_anh_nhe as T
-    # (a) danh sách việc: (tên người, ảnh gốc, ảnh 100x100 sẽ lưu)
-    viec = []
-    for p in sorted(glob.glob(os.path.join(C.THU_MUC_CHUP_TAY, "*", "**", "*.*"), recursive=True)):
-        phan = os.path.relpath(p, C.THU_MUC_CHUP_TAY).split(os.sep)   # [người, (train|test,) ảnh]
-        con = phan[1].lower() if len(phan) == 3 else ""
-        goc, duoi = os.path.splitext(phan[-1])
-        if duoi.lower() in (".heic", ".heif"):
-            print(f"  ! {'/'.join(phan)}: ảnh HEIC chưa đọc được -> đổi sang JPG")
-        if len(phan) > 3 or con not in ("", "train", "test") or duoi.lower() not in DUOI_ANH:
-            continue
-        ten = T.chuan_hoa_ten(phan[0])                  # 'Trần Văn Á' -> 'Tran_Van_A'
-        ra = T.chuan_hoa_ten(goc + "_" + duoi[1:]) + ".png"   # IMG_1.jpg -> IMG_1_jpg.png
-        viec.append((ten, p, os.path.join(C.THU_MUC_CHUP_TAY_100, ten, con, ra)))
-    # (b) ảnh gốc đã bị xóa -> xóa luôn ảnh đã căn chỉnh của nó
-    can_giu = {os.path.normcase(d) for _, _, d in viec}
-    for p in glob.glob(os.path.join(C.THU_MUC_CHUP_TAY_100, "**", "*.png"), recursive=True):
-        if os.path.normcase(p) not in can_giu:
-            os.remove(p)
-    # (c) căn chỉnh ảnh mới: ảnh 100x100 chưa có hoặc cũ hơn ảnh gốc
-    moi = [(ten, p, d) for ten, p, d in viec
-           if not os.path.exists(d) or os.path.getmtime(d) < os.path.getmtime(p)]
-    print(f"  Ảnh chụp tay: {len(viec)} ảnh gốc, cần căn chỉnh {len(moi)} ảnh")
-    if not moi:
-        return
-    lm = tao_bo_tim_mat(so_mat=5)
-    bc = pd.DataFrame([{"anh_goc": os.path.relpath(p, C.THU_MUC_CHUP_TAY), "ten": ten,
-                        "ket_qua": can_chinh_1_anh(lm, p, dich)} for ten, p, dich in moi])
-    lm.close()
-    os.makedirs(C.THU_MUC_CHUP_TAY_100, exist_ok=True)
-    bc.to_csv(os.path.join(C.THU_MUC_CHUP_TAY_100, "bao_cao.csv"), index=False,
-              encoding="utf-8-sig")
-    loi = bc[~bc["ket_qua"].isin(["OK", "NHIEU_MAT"])]
-    print(f"  Căn chỉnh được {len(bc) - len(loi)}/{len(bc)} ảnh -> dataset/chup_tay_100")
-    for r in loi.itertuples():
-        print(f"    ! {r.anh_goc}: {r.ket_qua}")
-
-
-def doc_anh_chup_tay():
-    """Đọc ảnh chụp tay đã căn chỉnh. file = <Tên>__<tên ảnh> để không trùng giữa các người;
-    tap_co_dinh = "train"/"test" nếu ảnh nằm trong thư mục con train/ hoặc test/."""
-    dong = []
-    for p in sorted(glob.glob(os.path.join(C.THU_MUC_CHUP_TAY_100, "*", "**", "*.png"),
-                              recursive=True)):
-        phan = os.path.relpath(p, C.THU_MUC_CHUP_TAY_100).split(os.sep)   # [tên, (train|test,) ảnh]
-        con = phan[1] if len(phan) == 3 else ""
-        tien_to = con + "_" if con else ""
-        dong.append({"duong_dan": p, "file": f"{phan[0]}__{tien_to}{phan[-1][:-4]}",
-                     "ten": phan[0], "nguon": "chup_tay", "luot": 0, "tu_the": "",
-                     "vai_tro": "biet", "tap_co_dinh": con})
-    print(f"  Ảnh chụp tay đã căn chỉnh: {len(dong)} ảnh")
-    return dong
-
-
-def gan_vai_tro(dong):
-    """Người trong lớp có < SO_ANH_TOI_THIEU ảnh (tự thu + chụp tay) chưa đủ để học
-    -> chỉ dùng làm NGƯỜI LẠ (test). Người trong CHI_LAM_NGUOI_LA cũng vậy."""
-    dem = pd.Series([d["ten"] for d in dong], dtype=str).value_counts()
-    it_anh = sorted(t for t, n in dem.items() if n < SO_ANH_TOI_THIEU)
-    for d in dong:
-        if d["ten"] in it_anh or d["ten"] in CHI_LAM_NGUOI_LA:
-            d["vai_tro"] = "nguoi_la"
-    if it_anh:
-        print(f"  ! Chưa đủ {SO_ANH_TOI_THIEU} ảnh -> tạm làm người lạ: "
-              + ", ".join(f"{t} ({dem[t]})" for t in it_anh))
-    return dong
-
-
-# ======================= 1.3 CHUẨN BỊ ẢNH LFW =======================
 def thu_muc_lfw_goc():
     """Thư mục ảnh LFW gốc (mỗi người 1 thư mục); None nếu chưa tải."""
     for p in (os.path.join(C.THU_MUC_LFW_GOC, "lfw_home", "lfw_funneled"),      # tải tự động
@@ -212,7 +117,7 @@ def thu_muc_lfw_goc():
 def chuan_bi_lfw():
     """Tải LFW -> chọn người -> MediaPipe tìm mặt -> căn chỉnh 5 điểm GIỐNG HỆT ảnh tự thu
     -> lưu dataset/lfw_xam_100. Chỉ làm 1 lần, các lần sau dùng lại."""
-    p_ds = os.path.join(C.THU_MUC_LFW, "danh_sach.csv")
+    p_ds = os.path.join(C.THU_MUC_LFW, "danhsachfwl.csv")
     if os.path.exists(p_ds):
         print("  Đã có ảnh LFW căn chỉnh sẵn")
         return
@@ -227,8 +132,8 @@ def chuan_bi_lfw():
     goc = thu_muc_lfw_goc()
     if goc is None:
         raise SystemExit("Chưa có LFW: tải tay lfw-funneled.tgz tại "
-                         "https://ndownloader.figshare.com/files/5976015, giải nén vào du_lieu_lfw")
-    import thu_anh_nhe as T
+                         "https://ndownloader.figshare.com/files/5976015, giải nén vào dataset/du_lieu_lfw")
+    import thu_anh as T
     rng = np.random.default_rng(C.RANDOM_STATE)
     thu_muc_nguoi = sorted(n for n in os.listdir(goc) if os.path.isdir(os.path.join(goc, n)))
     so_anh = {n: len(os.listdir(os.path.join(goc, n))) for n in thu_muc_nguoi}
@@ -260,16 +165,15 @@ def chuan_bi_lfw():
 
 
 def doc_anh_lfw():
-    p_ds = os.path.join(C.THU_MUC_LFW, "danh_sach.csv")
+    p_ds = os.path.join(C.THU_MUC_LFW, "danhsachfwl.csv")
     lfw = pd.read_csv(p_ds, dtype=str)
     dong = [{"duong_dan": os.path.join(C.THU_MUC_LFW, r.ten, r.file + ".png"), "file": r.file,
-             "ten": r.ten, "nguon": "lfw", "luot": 0, "tu_the": "", "vai_tro": r.vai_tro,
-             "tap_co_dinh": ""} for r in lfw.itertuples()]
+             "ten": r.ten, "nguon": "lfw", "luot": 0, "tu_the": "", "vai_tro": r.vai_tro} for r in lfw.itertuples()]
     print(f"  Ảnh LFW: {len(dong)} ảnh")
     return dong
 
 
-# ======================= 1.4 TIỀN XỬ LÝ =======================
+# ======================= 1.3 TIỀN XỬ LÝ =======================
 def tien_xu_ly_tat_ca(dong):
     """Đọc từng ảnh -> C.tien_xu_ly (lọc Gaussian + CLAHE). Ảnh hỏng/sai kích thước thì bỏ."""
     anh, giu = [], []
@@ -281,11 +185,11 @@ def tien_xu_ly_tat_ca(dong):
     return np.array(anh, dtype=np.uint8), pd.DataFrame(giu)
 
 
-# ======================= 1.5 THỐNG KÊ, TRỰC QUAN HÓA =======================
+# ======================= 1.4 THỐNG KÊ, TRỰC QUAN HÓA =======================
 def thong_ke_va_ve(df, anh):
     biet = df[df["vai_tro"] == "biet"]
     bang = pd.crosstab(biet["ten"], biet["nguon"])              # số ảnh mỗi người theo từng nguồn
-    bang = bang[[n for n in C.NGUON if n in bang]]             # cột: tự thu, chụp tay, LFW
+    bang = bang[[n for n in C.NGUON if n in bang]]             # cột: tự thu và LFW
     bang = bang.sort_values(list(bang.columns), ascending=False)   # người tự thu lên đầu
     print(bang.assign(tong=bang.sum(axis=1)).to_string())
     print(f"  Người lạ (chỉ test): {(df['vai_tro'] == 'nguoi_la').sum()} ảnh")
@@ -342,32 +246,28 @@ def main():
     print("=" * 70)
     print(" BƯỚC 1 – CHUẨN BỊ DỮ LIỆU")
     print("=" * 70)
-    print("\n1.1 Đọc ảnh tự thu (thu_anh_nhe.py)")
-    dong = doc_anh_tu_thu()
+    print("\n1.1 Đọc ảnh tự thu (thu_anh.py)")
+    dong = gan_vai_tro(doc_anh_tu_thu())
 
-    print("\n1.2 Ảnh chụp tay")
-    can_chinh_anh_chup_tay()
-    dong = gan_vai_tro(dong + doc_anh_chup_tay())
-
-    print("\n1.3 Chuẩn bị ảnh LFW")
+    print("\n1.2 Chuẩn bị ảnh LFW")
     chuan_bi_lfw()
     if chi_chuan_bi:
         print("\nXong phần chuẩn bị (--chuan-bi).")
         return
     dong += doc_anh_lfw()
 
-    print("\n1.4 Tiền xử lý (lọc Gaussian + CLAHE)")
+    print("\n1.3 Tiền xử lý (lọc Gaussian + CLAHE)")
     anh, df = tien_xu_ly_tat_ca(dong)
     print(f"  {len(anh)} ảnh -> mảng {anh.shape} (mỗi ảnh sẽ thành vector 10.000 chiều)")
     if df.empty:
-        raise SystemExit("Không có ảnh hợp lệ. Hãy chạy thu_anh_nhe.py hoặc kiểm tra dataset_nhe/mat_xam_100.")
+        raise SystemExit("Không có ảnh hợp lệ. Hãy chạy thu_anh.py hoặc kiểm tra dataset/mat_xam_100.")
     if df.loc[df["vai_tro"] == "biet", "ten"].nunique() < 2:
         raise SystemExit("Cần ít nhất 2 người quen để phân loại. Thêm ảnh cho người quen.")
 
-    print("\n1.5 Thống kê và trực quan hóa")
+    print("\n1.4 Thống kê và trực quan hóa")
     thong_ke_va_ve(df, anh)
 
-    print("\n1.6 Lưu dữ liệu")
+    print("\n1.5 Lưu dữ liệu")
     os.makedirs(C.DATASET, exist_ok=True)
     np.savez_compressed(C.FILE_ANH, anh=anh)                   # lưu mảng ảnh (nén)
     df.drop(columns="duong_dan").to_csv(C.FILE_DANH_SACH, index=False)

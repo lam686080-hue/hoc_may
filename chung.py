@@ -8,10 +8,8 @@
      (camera thật) – bài giảng: dữ liệu mới phải xử lý như tập train.
    - Hình vẽ cùng một kiểu, lưu vào thư mục ket_qua/.
 
- Ba nguồn ảnh (cột "nguon" trong danh_sach.csv):
-   tu_thu   : ảnh nhóm tự thu bằng thu_anh_nhe.py      dataset_nhe/mat_xam_100/<Tên>/
-   chup_tay : ảnh chụp tay bằng điện thoại          dataset/anh_chup_tay/<Tên>/  (ảnh gốc)
-              (các bạn trong lớp, thêm ảnh của nhóm) -> bước 1 căn chỉnh vào dataset/chup_tay_100/
+ Hai nguồn ảnh (cột "nguon" trong danh_sach.csv):
+   tu_thu   : ảnh nhóm tự thu bằng thu_anh.py      dataset/mat_xam_100/<Tên>/
    lfw      : bộ ảnh công khai LFW                  dataset/lfw_xam_100/<Tên>/
 
  Dữ liệu đi qua các bước:
@@ -39,12 +37,9 @@ import matplotlib.pyplot as plt
 # ============================ ĐƯỜNG DẪN ============================
 THU_MUC = os.path.dirname(os.path.abspath(__file__))
 DATASET = os.path.join(THU_MUC, "dataset")
-DATASET_NHE = os.path.join(THU_MUC, "dataset_nhe")
-THU_MUC_TU_THU = os.path.join(DATASET_NHE, "mat_xam_100")         # ảnh mặt tự thu (thu_anh_nhe.py)
-THU_MUC_CHUP_TAY = os.path.join(DATASET, "anh_chup_tay")      # ảnh chụp tay gốc, 1 người 1 thư mục
-THU_MUC_CHUP_TAY_100 = os.path.join(DATASET, "chup_tay_100")  # ảnh chụp tay đã căn chỉnh (bước 1)
+THU_MUC_TU_THU = os.path.join(DATASET, "mat_xam_100")         # ảnh mặt tự thu (thu_anh.py)
 THU_MUC_LFW = os.path.join(DATASET, "lfw_xam_100")            # ảnh LFW đã căn chỉnh (bước 1 tạo)
-THU_MUC_LFW_GOC = os.path.join(THU_MUC, "du_lieu_lfw")        # bộ LFW gốc tải về (~230 MB)
+THU_MUC_LFW_GOC = os.path.join(DATASET, "du_lieu_lfw")        # bộ LFW gốc tải về (~230 MB)
 KET_QUA = os.path.join(THU_MUC, "ket_qua")                    # hình và bảng kết quả
 MO_HINH = os.path.join(THU_MUC, "mo_hinh")                    # mô hình đã huấn luyện
 
@@ -63,11 +58,10 @@ CLAHE_LUOI = 8            # CLAHE chia ảnh thành lưới 8 x 8 ô
 RANDOM_STATE = 42         # cố định yếu tố ngẫu nhiên -> chạy lại ra cùng kết quả
 TEN_TU_THE = {"thang": "Nhìn thẳng", "trai": "Quay trái", "phai": "Quay phải",
               "len": "Ngẩng lên", "xuong": "Cúi xuống"}
-# 3 nguồn ảnh: tên hiển thị + màu dùng chung cho mọi biểu đồ
-NGUON = {"tu_thu": ("Tự thu (thu_anh_nhe.py)", "darkorange"),
-         "chup_tay": ("Chụp tay (điện thoại)", "mediumpurple"),
+# 2 nguồn ảnh: tên hiển thị + màu dùng chung cho mọi biểu đồ
+NGUON = {"tu_thu": ("Tự thu (thu_anh.py)", "darkorange"),
          "lfw": ("LFW (ảnh báo chí)", "steelblue")}
-TRONG_LOP = ("tu_thu", "chup_tay")   # người trong lớp: được hiện tên + điểm danh ở bước 6
+TRONG_LOP = ("tu_thu",)   # người trong lớp: được hiện tên + điểm danh ở bước 6
 
 _clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP, tileGridSize=(CLAHE_LUOI, CLAHE_LUOI))
 plt.rcParams["font.family"] = "DejaVu Sans"       # font có đủ dấu tiếng Việt
@@ -94,10 +88,11 @@ def doc_du_lieu():
     if not (os.path.exists(FILE_ANH) and os.path.exists(FILE_DANH_SACH)):
         raise SystemExit("Chưa có dữ liệu. Chạy buoc1_chuan_bi_du_lieu.py trước.")
     anh = np.load(FILE_ANH)["anh"]
-    df = pd.read_csv(FILE_DANH_SACH, dtype={"file": str, "ten": str, "tu_the": str,
-                                            "tap_co_dinh": str}).fillna("")
+    df = pd.read_csv(FILE_DANH_SACH, dtype={"file": str, "ten": str, "tu_the": str}).fillna("")
     if len(df) != len(anh):
         raise SystemExit("dataset/danh_sach.csv không khớp du_lieu_anh.npz. Chạy lại từ bước 1.")
+    if not df["nguon"].isin(NGUON).all():
+        raise SystemExit("Dữ liệu có nguồn không còn được sử dụng. Chạy lại từ bước 1.")
     return vector_hoa(anh), df
 
 

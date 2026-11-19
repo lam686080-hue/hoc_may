@@ -1,9 +1,9 @@
 {
-  "Mô hình tốt nhất (theo CV)": "Logistic Regression",
-  "Tham số": "{'C': 0.001}",
-  "Độ chính xác test (%)": "100.0",
-  "Số thành phần PCA": "33",
-  "Ngưỡng người lạ": "0.6",
-  "FAR / FRR tại ngưỡng (%)": "-",
-  "Người được điểm danh (trong lớp)": "bao, cao, hieu, lam, the_anh, tuan_tuanchoi"
+  "Mô hình": "Logistic Regression",
+  "Tham số": "{'C': 0.1}",
+  "Độ chính xác test (%)": "96.76",
+  "Số thành phần PCA": "153",
+  "Ngưỡng người lạ": "0.94",
+  "FAR / FRR trên ảnh dùng chọn ngưỡng (%)": "16.7 / 14.9",
+  "Người được điểm danh (trong lớp)": "Hoang_Le_Hai, Hoang_Tuan_Hung, Mai_Manh_Hung, Nguyen_Trung_Dung, Tong_Van_Dung, Vu_Duy_Anh, Vu_Van_Dai, bao, cao, hieu, lam, the_anh, tuan_tuanchoi"
 }

@@ -154,7 +154,7 @@ def main():
     print("\n3.5 Lưu kết quả")
     ten_mo_hinh = "Logistic Regression"
     os.makedirs(C.MO_HINH, exist_ok=True)
-    # người trong lớp (ảnh tự thu / chụp tay, không phải LFW): được hiện tên + điểm danh ở bước 6
+    # người trong lớp (ảnh tự thu): được hiện tên + điểm danh ở bước 6
     trong_lop = df["nguon"].isin(C.TRONG_LOP) & (df["vai_tro"] == "biet")
     nguoi_diem_danh = sorted(df.loc[trong_lop, "ten"].unique())
     joblib.dump({"mo_hinh": mh, "ten_mo_hinh": ten_mo_hinh, "so_thanh_phan_pca": k,

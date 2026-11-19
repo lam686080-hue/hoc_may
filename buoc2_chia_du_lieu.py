@@ -6,11 +6,9 @@
  Làm gì   : Quyết định ảnh nào dùng để HỌC (train), ảnh nào để KIỂM TRA (test).
             Mô hình chỉ được nhìn tập train; tập test để đánh giá khách quan ở bước 5.
  Cách chia:
-   - Ảnh từ thu_anh_nhe.py có một lượt: chia theo từng người, khoảng 75% học, 25% kiểm tra.
-     Với dữ liệu có hai lượt: lượt 1 để học, lượt 2 để kiểm tra
-     (ảnh liên tiếp trong 1 lượt rất giống nhau, chia ngẫu nhiên sẽ cho kết quả cao ảo).
-   - Ảnh chụp tay, ảnh LFW: mỗi người 75% train / 25% test (ít nhất 1 ảnh test);
-     ảnh trong thư mục con train/ hoặc test/ thì theo đúng thư mục đó.
+   - Ảnh tự thu có một lượt. Với ảnh người quen, chia theo từng người và từng nguồn
+     (tự thu, LFW), khoảng 75% train / 25% test. Nhóm có từ hai ảnh lấy ít nhất một
+     ảnh test. Nhóm chỉ có một ảnh dùng ảnh đó để train.
    - Người lạ: chỉ để test (mô hình chưa từng thấy) -> bước 5 chọn ngưỡng người lạ.
  Đầu vào  : dataset/danh_sach.csv (bước 1)
  Đầu ra   : dataset/danh_sach.csv thêm cột "tap" = train / test / nguoi_la
@@ -27,7 +25,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split   # hàm chia ngẫu nhiên của scikit-learn
 import chung as C
 
-TI_LE_TEST = 0.25          # ảnh chụp tay, ảnh LFW: 25% mỗi người làm test
+TI_LE_TEST = 0.25          # mặc định: 25% mỗi người làm test
 
 
 # ======================= 2.2 CHIA DỮ LIỆU =======================
@@ -36,19 +34,11 @@ def chia(df):
     tap = pd.Series("", index=df.index)                      # cột kết quả, ban đầu để trống
     tap[df["vai_tro"] == "nguoi_la"] = "nguoi_la"            # người lạ: chỉ để test
     biet = df[df["vai_tro"] == "biet"]                       # người quen: mô hình phải nhận ra
-    for (nguon, ten), nhom in biet.groupby(["nguon", "ten"]):    # từng nhóm (nguồn ảnh, người)
-        # (a) ảnh để trong thư mục con train/ hoặc test/: theo đúng thư mục đó
-        chi_dinh = nhom[nhom["tap_co_dinh"] != ""]
-        tap[chi_dinh.index] = chi_dinh["tap_co_dinh"]
-        nhom = nhom[nhom["tap_co_dinh"] == ""]               # phần còn lại chia theo quy tắc
-        if nguon == "tu_thu" and {1, 2} <= set(nhom["luot"]):
-            # (b) nếu bộ ảnh tự thu có đủ 2 lượt: lượt 1 -> train, lượt 2 -> test
-            tap[nhom.index[nhom["luot"] == 1]] = "train"
-            tap[nhom.index[nhom["luot"] == 2]] = "test"
-        elif len(nhom) == 1:
-            tap[nhom.index] = "train"                        # (c) chỉ có 1 ảnh: để học
-        elif len(nhom) > 1:
-            # (d) chia ngẫu nhiên 75/25, ít nhất 1 ảnh test (giống slide: train_test_split)
+    for _, nhom in biet.groupby(["nguon", "ten"]):
+        if len(nhom) == 1:
+            tap[nhom.index] = "train"
+        else:
+            # Chia ngẫu nhiên, giữ ít nhất một ảnh test trong mỗi nhóm có từ hai ảnh.
             so_test = max(1, round(TI_LE_TEST * len(nhom)))
             idx_train, idx_test = train_test_split(nhom.index, test_size=so_test,
                                                    random_state=C.RANDOM_STATE)

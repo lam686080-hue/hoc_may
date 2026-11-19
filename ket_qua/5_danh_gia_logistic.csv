@@ -1,0 +1,2 @@
+﻿mo_hinh,tham_so,cv_%,test_%,precision,recall,f1,ms_moi_anh
+Logistic Regression,{'C': 0.1},95.66,96.76,0.978,0.984,0.98,0.274

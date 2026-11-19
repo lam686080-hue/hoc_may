@@ -1,4 +1,4 @@
-<html><head><meta charset='utf-8'><title>Kết quả nhận diện khuôn mặt</title></head><body style='font-family:Arial;max-width:1200px;margin:auto'><h1>Kết quả</h1><p><b>Mô hình tốt nhất (theo CV):</b> Logistic Regression<br><b>Tham số:</b> {'C': 0.001}<br><b>Độ chính xác test (%):</b> 100.0<br><b>Số thành phần PCA:</b> 33<br><b>Ngưỡng người lạ:</b> 0.6<br><b>FAR / FRR tại ngưỡng (%):</b> -<br><b>Người được điểm danh (trong lớp):</b> bao, cao, hieu, lam, the_anh, tuan_tuanchoi</p>
+<html><head><meta charset='utf-8'><title>Kết quả nhận diện khuôn mặt</title></head><body style='font-family:Arial;max-width:1200px;margin:auto'><h1>Kết quả</h1><p><b>Mô hình:</b> Logistic Regression<br><b>Tham số:</b> {'C': 0.1}<br><b>Độ chính xác test (%):</b> 96.76<br><b>Số thành phần PCA:</b> 153<br><b>Ngưỡng người lạ:</b> 0.94<br><b>FAR / FRR trên ảnh dùng chọn ngưỡng (%):</b> 16.7 / 14.9<br><b>Người được điểm danh (trong lớp):</b> Hoang_Le_Hai, Hoang_Tuan_Hung, Mai_Manh_Hung, Nguyen_Trung_Dung, Tong_Van_Dung, Vu_Duy_Anh, Vu_Van_Dai, bao, cao, hieu, lam, the_anh, tuan_tuanchoi</p>
 <table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
@@ -15,73 +15,13 @@
   <tbody>
     <tr>
       <td>Logistic Regression</td>
-      <td>{'C': 0.001}</td>
-      <td>100.00</td>
-      <td>100.00</td>
-      <td>1.000</td>
-      <td>1.000</td>
-      <td>1.000</td>
-      <td>0.757</td>
-    </tr>
-    <tr>
-      <td>KNN</td>
-      <td>{'n_neighbors': 1}</td>
-      <td>100.00</td>
-      <td>100.00</td>
-      <td>1.000</td>
-      <td>1.000</td>
-      <td>1.000</td>
-      <td>0.719</td>
-    </tr>
-    <tr>
-      <td>SVM linear</td>
-      <td>{'C': 0.0001}</td>
-      <td>100.00</td>
-      <td>100.00</td>
-      <td>1.000</td>
-      <td>1.000</td>
-      <td>1.000</td>
-      <td>0.059</td>
-    </tr>
-    <tr>
-      <td>SVM poly</td>
-      <td>{'C': 1, 'degree': 2}</td>
-      <td>100.00</td>
-      <td>100.00</td>
-      <td>1.000</td>
-      <td>1.000</td>
-      <td>1.000</td>
-      <td>0.081</td>
-    </tr>
-    <tr>
-      <td>SVM rbf</td>
-      <td>{'C': 1, 'gamma': 1e-05}</td>
-      <td>100.00</td>
-      <td>100.00</td>
-      <td>1.000</td>
-      <td>1.000</td>
-      <td>1.000</td>
-      <td>0.094</td>
-    </tr>
-    <tr>
-      <td>Naive Bayes</td>
-      <td>{'var_smoothing': 1e-09}</td>
-      <td>100.00</td>
-      <td>100.00</td>
-      <td>1.000</td>
-      <td>1.000</td>
-      <td>1.000</td>
-      <td>0.111</td>
-    </tr>
-    <tr>
-      <td>Decision Tree</td>
-      <td>{'criterion': 'gini', 'max_depth': 10}</td>
-      <td>92.54</td>
-      <td>97.92</td>
-      <td>0.981</td>
-      <td>0.979</td>
-      <td>0.979</td>
-      <td>0.074</td>
+      <td>{'C': 0.1}</td>
+      <td>95.66</td>
+      <td>96.76</td>
+      <td>0.978</td>
+      <td>0.984</td>
+      <td>0.98</td>
+      <td>0.274</td>
     </tr>
   </tbody>
 </table>
@@ -96,17 +36,16 @@
 <p><b>3_khoi_phuc_pca.png</b><br><img src='3_khoi_phuc_pca.png' style='max-width:100%'>
 <p><b>3_pca_phuong_sai.png</b><br><img src='3_pca_phuong_sai.png' style='max-width:100%'>
 <p><b>3_truoc_sau_pca.png</b><br><img src='3_truoc_sau_pca.png' style='max-width:100%'>
-<h2>Bước 3.3 – 3.5 – Huấn luyện 7 mô hình (Thành viên 2 – Nguyễn Văn Lâm)</h2>
-<p><b>3_cay_quyet_dinh.png</b><br><img src='3_cay_quyet_dinh.png' style='max-width:100%'>
-<p><b>3_cv_cac_mo_hinh.png</b><br><img src='3_cv_cac_mo_hinh.png' style='max-width:100%'>
-<p><b>3_svm_rbf_C_gamma.png</b><br><img src='3_svm_rbf_C_gamma.png' style='max-width:100%'>
+<h2>Bước 3.3 – 3.5 – Huấn luyện hồi quy logistic (Thành viên 2 – Nguyễn Văn Lâm)</h2>
 <h2>Bước 4 – Dự đoán (Thành viên 2 – Nguyễn Văn Lâm)</h2>
 <p><b>4_du_doan_tap_test.png</b><br><img src='4_du_doan_tap_test.png' style='max-width:100%'>
 <p><b>4_xac_suat_du_doan.png</b><br><img src='4_xac_suat_du_doan.png' style='max-width:100%'>
 <h2>Bước 5 – Đánh giá (Thành viên 3 – Lê Thanh Cao)</h2>
-<p><b>5_ma_tran_nham_lan_cac_mo_hinh.png</b><br><img src='5_ma_tran_nham_lan_cac_mo_hinh.png' style='max-width:100%'>
+<p><b>5_anh_nhan_sai.png</b><br><img src='5_anh_nhan_sai.png' style='max-width:100%'>
+<p><b>5_danh_gia_logistic.png</b><br><img src='5_danh_gia_logistic.png' style='max-width:100%'>
 <p><b>5_ma_tran_nham_lan_tot_nhat.png</b><br><img src='5_ma_tran_nham_lan_tot_nhat.png' style='max-width:100%'>
+<p><b>5_nguoi_la.png</b><br><img src='5_nguoi_la.png' style='max-width:100%'>
+<p><b>5_nguoi_la_anh.png</b><br><img src='5_nguoi_la_anh.png' style='max-width:100%'>
 <p><b>5_roc_tot_nhat.png</b><br><img src='5_roc_tot_nhat.png' style='max-width:100%'>
-<p><b>5_so_sanh_mo_hinh.png</b><br><img src='5_so_sanh_mo_hinh.png' style='max-width:100%'>
 <p><b>5_theo_nguon_anh.png</b><br><img src='5_theo_nguon_anh.png' style='max-width:100%'>
 <p><b>5_theo_tu_the.png</b><br><img src='5_theo_tu_the.png' style='max-width:100%'></body></html>

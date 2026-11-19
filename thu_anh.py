@@ -3,7 +3,7 @@
  THU THẬP DỮ LIỆU KHUÔN MẶT – BÀI TẬP LỚN NHẬN DIỆN KHUÔN MẶT
 =====================================================================
 Cần MediaPipe, NumPy và bản OpenCV có giao diện.
-Chạy:              python thu_anh_nhe.py
+Chạy:              python thu_anh.py
 
 KỊCH BẢN MỖI NGƯỜI (giống hệt nhau cho mọi người -> dữ liệu cân bằng)
   1 LƯỢT x 5 TƯ THẾ = 30 ảnh
@@ -20,20 +20,20 @@ CHỈ CHỤP KHI ĐẠT TẤT CẢ:
   - mắt mở, đủ sáng, đủ tương phản, ảnh nét
   - khác các ảnh vừa chụp (đứng yên -> không chụp)
 
-DỮ LIỆU LƯU RA (thư mục "dataset_nhe" cạnh file này)
-  dataset_nhe/anh_goc/<ten>/*.jpg      khung hình gốc đầy đủ (để sau này xử lý lại tùy ý)
-  dataset_nhe/mat_mau_112/<ten>/*.png  mặt màu đã căn chỉnh 112x112 (chuẩn ArcFace)
-  dataset_nhe/mat_xam_100/<ten>/*.png  mặt xám đã căn chỉnh 100x100 (dùng cho PCA và hồi quy logistic)
-  dataset_nhe/metadata.csv             thông tin từng ảnh: người, lượt, tư thế, góc đầu,
+DỮ LIỆU LƯU RA (thư mục "dataset" cạnh file này)
+  dataset/anh_goc/<ten>/*.jpg      khung hình gốc đầy đủ (để sau này xử lý lại tùy ý)
+  dataset/mat_mau_112/<ten>/*.png  mặt màu đã căn chỉnh 112x112 (chuẩn ArcFace)
+  dataset/mat_xam_100/<ten>/*.png  mặt xám đã căn chỉnh 100x100 (dùng cho PCA và hồi quy logistic)
+  dataset/metadata.csv             thông tin từng ảnh: người, lượt, tư thế, góc đầu,
                                    điểm cười, độ nét, độ sáng, 5 điểm mốc...
-  dataset_nhe/xem_nhanh/<ten>.jpg      lưới toàn bộ ảnh mặt của 1 người để soát nhanh
-  dataset_nhe/cau_hinh_thu_thap.json   cấu hình + thông tin các phiên thu (ghi vào báo cáo)
+  dataset/xem_nhanh/<ten>.jpg      lưới toàn bộ ảnh mặt của 1 người để soát nhanh
+  dataset/cau_hinh_thu_thap.json   cấu hình + thông tin các phiên thu (ghi vào báo cáo)
   Tên file: <ten>_<so>_L<luot>_<tu_the>  (vd: Nguyen_Van_Lam_0007_L1_trai)
 
 Bị ngắt giữa chừng? Chạy lại, nhập ĐÚNG tên cũ, gõ c -> chụp tiếp phần còn thiếu.
 
-SAU KHI THU: chạy  python kiem_tra.py dataset_nhe  để kiểm tra. Nếu có ảnh lỗi, script kiểm
-tra sẽ chuyển ảnh lỗi sang dataset_nhe/loai_bo -> chạy lại thu_anh_nhe.py, nhập đúng tên, gõ c:
+SAU KHI THU: chạy  python kiem_tra.py dataset  để kiểm tra. Nếu có ảnh lỗi, script kiểm
+tra sẽ chuyển ảnh lỗi sang dataset/loai_bo -> chạy lại thu_anh.py, nhập đúng tên, gõ c:
 chương trình tự chụp lại ĐÚNG những ảnh còn thiếu (đúng lượt, tư thế, khoảng góc).
 
 PHÍM TẮT (bấm khi đang chọn cửa sổ camera):  q thoát | p tạm dừng | m lấy lại mốc
@@ -129,7 +129,7 @@ AM_THANH = True               # tiếng bíp khi xong bước / xong lượt (Wi
 
 # ---------- Lưu trữ ----------
 THU_MUC_GOC = os.path.dirname(os.path.abspath(__file__))
-THU_MUC_DATA = os.path.join(THU_MUC_GOC, "dataset_nhe")
+THU_MUC_DATA = os.path.join(THU_MUC_GOC, "dataset")
 LUU_ANH_GOC = True
 CHAT_LUONG_JPG = 95
 MODEL = os.path.join(THU_MUC_GOC, "face_landmarker.task")
@@ -162,7 +162,7 @@ COT_CSV = ["file", "so", "ten", "luot", "tu_the", "khoang_goc", "phien", "thoi_g
 
 # =====================================================================
 # 2. HÀM XỬ LÝ KHUÔN MẶT (dùng lại được ở bước nhận diện/triển khai:
-#    from thu_anh_nhe import tao_landmarker, trich_thong_tin, can_chinh_mat)
+#    from thu_anh import tao_landmarker, trich_thong_tin, can_chinh_mat)
 # =====================================================================
 def tai_model():
     """Tải model Face Landmarker (lần đầu) và trả về nội dung dạng bytes."""
@@ -483,7 +483,7 @@ def tao_anh_xem_nhanh(ten, so_cot=16):
 
 def in_tong_ket():
     dong = [d for d in doc_csv() if d.get("ten") and d.get("tu_the")]   # bỏ dòng hỏng
-    print("\n" + "=" * 64 + "\nTỔNG KẾT DỮ LIỆU (dataset_nhe/metadata.csv)\n" + "=" * 64)
+    print("\n" + "=" * 64 + "\nTỔNG KẾT DỮ LIỆU (dataset/metadata.csv)\n" + "=" * 64)
     if not dong:
         print("  Chưa có ảnh nào.")
         return
@@ -1158,7 +1158,7 @@ def in_huong_dan():
     print(f" 5. Mỗi người {TONG_MOI_NGUOI} ảnh. Quay, ngẩng và cúi nhẹ theo gợi ý.")
     print("    Khung XANH = đúng tư thế, đang chụp | Khung ĐỎ = chưa đúng, đọc gợi ý màu cam.")
     print("    Biểu đồ: chấm phải nằm trong ô vàng. Mũi tên vàng chỉ hướng cần chỉnh.")
-    print(" 6. Thu xong 1 người, mở dataset_nhe/xem_nhanh/<ten>.jpg để soát lại ảnh.")
+    print(" 6. Thu xong 1 người, mở dataset/xem_nhanh/<ten>.jpg để soát lại ảnh.")
     print("=" * 70)
 
 

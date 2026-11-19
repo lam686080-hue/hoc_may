@@ -6,7 +6,7 @@
  Làm gì   : Camera -> tìm các khuôn mặt -> căn chỉnh + tiền xử lý GIỐNG HỆT
             bước 1 -> hồi quy logistic (bước 5) cho xác suất -> hiện tên / "Nguoi la"
             -> nhận ổn định 1,5 giây thì ghi điểm danh. Chạy trên Jetson, xem qua web.
- Đầu vào  : mo_hinh/mo_hinh_tot_nhat.joblib (bước 5), camera đã chọn trong thu_anh_nhe.py
+ Đầu vào  : mo_hinh/mo_hinh_tot_nhat.joblib (bước 5), camera đã chọn trong thu_anh.py
  Đầu ra   : hình nhận diện (cửa sổ hoặc web), file diem_danh.csv
  Các bước : 6.1 Nạp mô hình
             6.2 Kết nối camera (luồng đọc riêng, tự kết nối lại khi mất tín hiệu)
@@ -16,7 +16,7 @@
             6.6 Vẽ kết quả, hiển thị ra cửa sổ hoặc trang web
  Chạy     : python buoc6_nhan_dien.py          (laptop, hiện cửa sổ – bấm q để thoát)
             python3 buoc6_nhan_dien.py --web   (xem qua cổng 5000 khi chạy trực tiếp trên Orin)
- Cần cùng thư mục: chung.py, thu_anh_nhe.py (hàm camera + căn chỉnh mặt), face_landmarker.task
+ Cần cùng thư mục: chung.py, thu_anh.py (hàm camera + căn chỉnh mặt), face_landmarker.task
 =====================================================================
 """
 import os
@@ -36,7 +36,7 @@ from sklearn.linear_model import LogisticRegression
 import mediapipe as mp       # tìm khuôn mặt + 478 điểm mốc
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision
-import thu_anh_nhe as T          # dùng lại: camera, xoay hình, góc đầu, căn chỉnh mặt 5 điểm
+import thu_anh as T          # dùng lại: camera, xoay hình, góc đầu, căn chỉnh mặt 5 điểm
 
 # ============================ CẤU HÌNH ============================
 NGUONG_NGUOI_LA = None             # None = dùng ngưỡng bước 5 đã chọn; hoặc đặt tay, vd 0.5
@@ -230,7 +230,7 @@ def main():
         if not che_do_web:
             tai_nguyen.callback(cv2.destroyAllWindows)
         if not cam.cho_khung_dau(15):
-            raise SystemExit("Không nhận được hình. Kiểm tra CAMERA trong thu_anh_nhe.py (webcam USB hoặc URL điện thoại).")
+            raise SystemExit("Không nhận được hình. Kiểm tra CAMERA trong thu_anh.py (webcam USB hoặc URL điện thoại).")
         xoay = T.XOAY_DU_PHONG if isinstance(T.XOAY, str) else T.XOAY
         if isinstance(T.XOAY, str) and not che_do_web:    # tự nhận chiều camera (cần cửa sổ)
             cv2.namedWindow(T.TEN_CUA_SO, cv2.WINDOW_AUTOSIZE)

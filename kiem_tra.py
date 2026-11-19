@@ -1,13 +1,13 @@
 """
 =====================================================================
- KIỂM TRA DỮ LIỆU KHUÔN MẶT ĐÃ THU  (dùng cấu hình của thu_anh_nhe.py)
+ KIỂM TRA DỮ LIỆU KHUÔN MẶT ĐÃ THU  (dùng cấu hình của thu_anh.py)
 =====================================================================
 Cài đặt (1 lần):  pip install mediapipe opencv-python numpy
-Chạy:             python kiem_tra.py               (thư mục dataset_nhe cạnh file này)
+Chạy:             python kiem_tra.py               (thư mục dataset cạnh file này)
             hoặc  python kiem_tra.py <đường_dẫn_dataset>
-!! Hãy TẮT thu_anh_nhe.py trước khi chạy kiểm tra.
+!! Hãy TẮT thu_anh.py trước khi chạy kiểm tra.
 
-Ngưỡng kiểm tra được đọc từ dataset_nhe/cau_hinh_thu_thap.json (do thu_anh_nhe.py ghi lúc thu)
+Ngưỡng kiểm tra được đọc từ dataset/cau_hinh_thu_thap.json (do thu_anh.py ghi lúc thu)
 -> kiểm tra đúng theo cấu hình đã dùng khi chụp.
 
 6 NHÓM KIỂM TRA
@@ -24,14 +24,14 @@ MỨC ĐỘ
   CANH_BAO : nghi vấn -> mở lưới ảnh xem bằng mắt, đa số vẫn dùng được
 
 THU LẠI ẢNH LỖI
-  Cuối báo cáo, script hỏi có chuyển ảnh lỗi sang dataset_nhe/loai_bo/<thời_gian>/ không.
+  Cuối báo cáo, script hỏi có chuyển ảnh lỗi sang dataset/loai_bo/<thời_gian>/ không.
   Đồng ý -> ảnh lỗi được CHUYỂN (không xóa) + bỏ khỏi metadata.csv (có bản sao lưu).
-  Sau đó: chạy thu_anh_nhe.py, nhập đúng tên, gõ c -> tự chụp lại đúng những ảnh còn thiếu.
+  Sau đó: chạy thu_anh.py, nhập đúng tên, gõ c -> tự chụp lại đúng những ảnh còn thiếu.
   Thu xong chạy lại file này để kiểm tra lần nữa.
   Muốn thu lại 1 ảnh CẢNH BÁO cụ thể: xóa ảnh đó trong mat_mau_112 rồi chạy lại kiểm tra
   (ảnh sẽ thành LỖI "thiếu file" và được đề nghị thu lại).
 
-KẾT QUẢ (dataset_nhe/kiem_tra)
+KẾT QUẢ (dataset/kiem_tra)
   bao_cao.csv      trạng thái từng ảnh + lý do
   <ten>.jpg        lưới ảnh theo lượt & tư thế: viền ĐỎ = lỗi, viền CAM = cảnh báo
   phan_bo_goc.png  biểu đồ góc đầu toàn bộ ảnh (dùng cho báo cáo)
@@ -49,7 +49,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import thu_anh_nhe as T
+import thu_anh as T
 
 try:
     import mediapipe as mp
@@ -101,7 +101,7 @@ def doc_cau_hinh():
     TU_THE = [(ma, so, khoang) for ma, _, _, so, khoang in T.TU_THE]
     SO_LUOT = len(T.LUOT)
     if not os.path.exists(FILE_CAU_HINH):
-        return "thu_anh_nhe.py (cấu hình mặc định)"
+        return "thu_anh.py (cấu hình mặc định)"
     try:
         with open(FILE_CAU_HINH, encoding="utf-8") as f:
             da_luu = json.load(f)["cau_hinh"]
@@ -109,7 +109,7 @@ def doc_cau_hinh():
         so_luot = len(da_luu.get("luot", []))
         nguong = {**C, **da_luu.get("nguong", {})}
     except (OSError, ValueError, KeyError, TypeError, IndexError, AttributeError) as loi:
-        return f"thu_anh_nhe.py (không đọc được {FILE_CAU_HINH}: {loi})"
+        return f"thu_anh.py (không đọc được {FILE_CAU_HINH}: {loi})"
     C, TU_THE, SO_LUOT = nguong, tu_the or TU_THE, so_luot or SO_LUOT
     return FILE_CAU_HINH
 
@@ -127,7 +127,7 @@ def chi_so_ma():
 
 
 # =====================================================================
-# HÀM XỬ LÝ KHUÔN MẶT (giống hệt thu_anh_nhe.py)
+# HÀM XỬ LÝ KHUÔN MẶT (giống hệt thu_anh.py)
 # =====================================================================
 def tao_landmarker(tin_cay=0.6, so_mat=2):
     return vision.FaceLandmarker.create_from_options(vision.FaceLandmarkerOptions(
@@ -242,7 +242,7 @@ def kiem_tra_du(nhom, kq):
             if len(cua) > so_anh:
                 thua.append(f"L{l + 1} {ma} {len(cua)}/{so_anh}")
             if len(cua) < so_anh:
-                if khoang:          # chỉ rõ thiếu ở khoảng góc nào (thu_anh_nhe.py sẽ chụp bù đúng khoảng đó)
+                if khoang:          # chỉ rõ thiếu ở khoảng góc nào (thu_anh.py sẽ chụp bù đúng khoảng đó)
                     ct = T.chi_tieu_khoang(so_anh, len(khoang))
                     for i, (lo, hi) in enumerate(khoang):
                         n = sum(1 for d in cua if d.get("khoang_goc") == str(i))
@@ -826,7 +826,7 @@ def main():
         ten_can = sorted(thieu)
 
     print("\nBƯỚC TIẾP THEO:")
-    print("  1. Chạy:  python thu_anh_nhe.py")
+    print("  1. Chạy:  python thu_anh.py")
     print(f"  2. Nhập đúng tên: {', '.join(ten_can)}  rồi gõ c -> chương trình chụp lại ĐÚNG phần còn thiếu")
     print("  3. Thu xong chạy lại:  python kiem_tra.py")
 

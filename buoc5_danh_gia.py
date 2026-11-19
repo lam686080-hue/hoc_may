@@ -120,7 +120,7 @@ def ve_roc(y_test, P_test, lop, ten_mo_hinh):
 
 # ======================= 5.5 PHÂN TÍCH LỖI =======================
 def phan_tich_loi(X_test, y_test, y_doan, tu_the, nguon, ten_mo_hinh):
-    # (a) độ chính xác theo nguồn ảnh: tự thu / chụp tay / LFW
+    # (a) độ chính xác theo nguồn ảnh: tự thu và LFW
     ds = [n for n in C.NGUON if (nguon == n).any()]
     acc = [accuracy_score(y_test[nguon == n], y_doan[nguon == n]) * 100 for n in ds]
     print("  Theo nguồn ảnh: " + ", ".join(f"{C.NGUON[n][0]} {a:.0f}%" for n, a in zip(ds, acc)))
