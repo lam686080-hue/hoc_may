@@ -40,8 +40,14 @@ def chia(df):
         else:
             # Chia ngẫu nhiên, giữ ít nhất một ảnh test trong mỗi nhóm có từ hai ảnh.
             so_test = max(1, round(TI_LE_TEST * len(nhom)))
+           strat = None
+           if nhom["nguon"].iloc[0] == "tu_thu" and "tu_the" in nhom.columns:
+              dem = nhom["tu_the"].value_counts()
+            if len(dem) > 0 and dem.min() >= 2 and so_test >= len(dem):
+               strat = nhom["tu_the"]
+     
             idx_train, idx_test = train_test_split(nhom.index, test_size=so_test,
-                                                   random_state=C.RANDOM_STATE)
+                                                   stratify=strat, random_state=C.RANDOM_STATE)
             tap[idx_train] = "train"
             tap[idx_test] = "test"
     return tap
