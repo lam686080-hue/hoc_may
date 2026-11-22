@@ -1,2 +1,2 @@
 ﻿mo_hinh,tham_so,cv_%,cv_std_%,log_loss,thoi_gian_s
-Logistic Regression,{'C': 1},100.0,0.0,0.0011,11.0
+Logistic Regression,{'C': 1},100.0,0.0,0.0024,11.3

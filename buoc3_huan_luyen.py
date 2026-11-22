@@ -34,7 +34,7 @@ def phan_tich_pca(X_train, y_train):
     pca = PCA(svd_solver="full").fit(Xs)            # tính TẤT CẢ thành phần chính (vector riêng)
     ti_le = pca.explained_variance_ratio_           # tỉ lệ phương sai của từng thành phần
     tich_luy = np.cumsum(ti_le)
-      X_hog = C.trich_hog(X_train)
+    X_hog = C.trich_hog(X_train)
     scaler_hog = StandardScaler().fit(X_hog)
     Xs_hog = scaler_hog.transform(X_hog)
     pca_hog = PCA(svd_solver="full", random_state=C.RANDOM_STATE).fit(Xs_hog)
@@ -46,7 +46,7 @@ def phan_tich_pca(X_train, y_train):
           f"để giữ {GIU_PHUONG_SAI:.0%} phương sai")
 
     # (a) Biểu đồ kết hợp: phương sai từng thành phần (cột) + tích lũy (đường)
-      m = min(len(ti_le_hog), max(60, k + 10))
+    m = min(len(ti_le_hog), max(60, k + 10))
     fig, ax1 = plt.subplots(figsize=(10, 4.2))
     so_cot = min(50, len(ti_le_hog))
     ax1.bar(np.arange(1, so_cot + 1), ti_le_hog[:so_cot] * 100, color="steelblue")
@@ -73,20 +73,20 @@ def phan_tich_pca(X_train, y_train):
     C.luu_hinh("3_eigenfaces.png")
 
     # (c) Trước / sau PCA (giống code slide PCA): 2 pixel gốc vs 2 thành phần chính đầu
-    Z = pca.transform(Xs))
-      Z_hog = pca_hog.transform(Xs_hog)
+    Z = pca.transform(Xs)
+    Z_hog = pca_hog.transform(Xs_hog)
     so = pd.factorize(y_train)[0]                        # tên người -> mã số 0, 1, 2...
     plt.figure(figsize=(12, 5))
     plt.subplot(1, 2, 1)
-      plt.scatter(Xs_hog[:, 0], Xs_hog[:, 1], c=so, cmap="tab20", edgecolor="k", s=15)
-      plt.xlabel("Đặc trưng HOG 1")
-      plt.ylabel("Đặc trưng HOG 2")
-      plt.title("Trước PCA: 2 đặc trưng HOG đầu (đã chuẩn hóa)")
+    plt.scatter(Xs_hog[:, 0], Xs_hog[:, 1], c=so, cmap="tab20", edgecolor="k", s=15)
+    plt.xlabel("Đặc trưng HOG 1")
+    plt.ylabel("Đặc trưng HOG 2")
+    plt.title("Trước PCA: 2 đặc trưng HOG đầu (đã chuẩn hóa)")
     plt.subplot(1, 2, 2)
-      plt.scatter(Z_hog[:, 0], Z_hog[:, 1], c=so, cmap="tab20", edgecolor="k", s=15)
+    plt.scatter(Z_hog[:, 0], Z_hog[:, 1], c=so, cmap="tab20", edgecolor="k", s=15)
     plt.xlabel("Principal Component 1")
     plt.ylabel("Principal Component 2")
-      plt.title("Sau PCA: chiếu lên PC1, PC2 (từ HOG)")
+    plt.title("Sau PCA: chiếu lên PC1, PC2 (từ HOG)")
     plt.colorbar(label="Người (mã số)")
     C.luu_hinh("3_truoc_sau_pca.png")
 
