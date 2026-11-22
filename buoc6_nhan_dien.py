@@ -63,7 +63,7 @@ class NhanDien:
         self.lop = list(self.mo_hinh.classes_)          # danh sách người, đúng thứ tự cột xác suất
         # ngưỡng người lạ: dùng ngưỡng bước 5 (FAR và FRR gần nhau nhất), trừ khi đặt tay ở phần cấu hình
         self.nguong = goi["nguong_nguoi_la"] if NGUONG_NGUOI_LA is None else NGUONG_NGUOI_LA
-        # chỉ người TRONG LỚP mới hiện tên + điểm danh; giống người LFW -> "Nguoi la"
+        # chỉ người TRONG LỚP mới hiện tên + điểm danh
         self.nguoi_diem_danh = set(goi["nguoi_diem_danh"])
         print(f"Mô hình: {goi['ten_mo_hinh']} | ngưỡng người lạ: {self.nguong}\n"
               f"Nhận diện + điểm danh: {', '.join(sorted(self.nguoi_diem_danh))}")
@@ -75,9 +75,7 @@ class NhanDien:
     def du_doan(self, raw, d5):
         """Căn chỉnh 5 điểm -> ảnh xám 100x100 -> C.tien_xu_ly (GIỐNG HỆT bước 1)
         -> vector 10.000 chiều -> predict_proba: xác suất thuộc từng người."""
-        mat = T.can_chinh_mat(raw, d5, C.KICH_THUOC)                # căn chỉnh như lúc thu ảnh
-        xam = C.tien_xu_ly(cv2.cvtColor(mat, cv2.COLOR_BGR2GRAY))  # lọc Gaussian + CLAHE
-        return self.mo_hinh.predict_proba(C.vector_hoa(xam[None]))[0]
+        return self.mo_hinh.predict_proba(C.vector_hoa(C.mat_xam_chuan(raw, d5)[None]))[0]
 
     # ---------------------- 6.5 QUYẾT ĐỊNH TÊN + ĐIỂM DANH ----------------------
     def ghep_theo_doi(self, cac_mat, bay_gio):
@@ -101,7 +99,7 @@ class NhanDien:
             if xs is not None:
                 i = int(np.argmax(xs))                             # người có xác suất cao nhất
                 du_tu_tin = xs[i] >= self.nguong
-                trong_lop = self.lop[i] in self.nguoi_diem_danh    # người trong lớp, không phải LFW
+                trong_lop = self.lop[i] in self.nguoi_diem_danh    # người trong lớp
                 ten = self.lop[i] if (du_tu_tin and trong_lop) else "Nguoi la"
             # (d) nhận liên tục cùng 1 tên từ lúc nào (đủ 1,5 giây thì điểm danh)
             tu_luc = bay_gio

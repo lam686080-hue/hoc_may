@@ -111,13 +111,15 @@ def huan_luyen(X_train, y_train, k):
             ("model", LogisticRegression(max_iter=5000, class_weight="balanced")),
         ], memory=bo_nho)
         tim = GridSearchCV(pipeline, {"model__C": [0.001, 0.01, 0.1, 1]},
-                           cv=cv, scoring="accuracy", n_jobs=1)
+                           cv=cv, scoring={"accuracy": "accuracy", "neg_log_loss": "neg_log_loss"}, refit="neg_log_loss", n_jobs=1)
         tim.fit(X_train, y_train)
         mh = tim.best_estimator_.set_params(memory=None)
+        idx = tim.best_index_
     bang = pd.DataFrame([{
         "mo_hinh": "Logistic Regression", "tham_so": str({"C": tim.best_params_["model__C"]}),
-        "cv_%": round(100 * tim.best_score_, 2),
-        "cv_std_%": round(100 * tim.cv_results_["std_test_score"][tim.best_index_], 2),
+        "cv_%": round(100 * tim.cv_results_["mean_test_accuracy"][idx], 2),
+        "cv_std_%": round(100 * tim.cv_results_["std_test_accuracy"][idx], 2),
+        "log_loss": round(-tim.best_score_, 4),
         "thoi_gian_s": round(time.perf_counter() - bat_dau, 1),
     }])
     print(bang.to_string(index=False))

@@ -1,9 +1,13 @@
 {
   "Mô hình": "Logistic Regression",
-  "Tham số": "{'C': 0.1}",
-  "Độ chính xác test (%)": "96.76",
-  "Số thành phần PCA": "153",
-  "Ngưỡng người lạ": "0.94",
-  "FAR / FRR trên ảnh dùng chọn ngưỡng (%)": "16.7 / 14.9",
-  "Người được điểm danh (trong lớp)": "Hoang_Le_Hai, Hoang_Tuan_Hung, Mai_Manh_Hung, Nguyen_Trung_Dung, Tong_Van_Dung, Vu_Duy_Anh, Vu_Van_Dai, bao, cao, hieu, lam, the_anh, tuan_tuanchoi"
+  "Tham số": "{'C': 1}",
+  "Độ chính xác test (%)": "100.0",
+  "Số thành phần PCA": "67",
+  "Ngưỡng người lạ": "0.99",
+  "Cách chọn ngưỡng": "Cân bằng FAR/FRR",
+  "Ảnh lạ dùng chọn ngưỡng": "150",
+  "Ảnh lạ kiểm tra bị nhận nhầm": "2/14",
+  "Ảnh quen kiểm tra nhận đúng sau ngưỡng": "60/60",
+  "FAR / FRR trên ảnh dùng chọn ngưỡng (%)": "13.3 / 0.0",
+  "Người được điểm danh (trong lớp)": "Bui_Anh_Tuan, Bui_Trung_Hieu, Hoang_Le_Hai, Hoang_Tuan_Hung, Le_Thanh_Cao, Ly_The_Anh, Mai_Manh_Hung, Nguyen_Hoang_Anh, Nguyen_Trong_Thuy, Nguyen_Trung_Dung, Nguyen_Van_Lam, Tong_Van_Dung, Vu_Duy_Anh, Vu_Van_Dai, Vu_Viet_Bao"
 }

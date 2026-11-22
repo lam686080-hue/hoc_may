@@ -7,7 +7,7 @@
             Mô hình chỉ được nhìn tập train; tập test để đánh giá khách quan ở bước 5.
  Cách chia:
    - Ảnh tự thu có một lượt. Với ảnh người quen, chia theo từng người và từng nguồn
-     (tự thu, LFW), khoảng 75% train / 25% test. Nhóm có từ hai ảnh lấy ít nhất một
+     (ảnh tự thu), khoảng 75% train / 25% test. Nhóm có từ hai ảnh lấy ít nhất một
      ảnh test. Nhóm chỉ có một ảnh dùng ảnh đó để train.
    - Người lạ: chỉ để test (mô hình chưa từng thấy) -> bước 5 chọn ngưỡng người lạ.
  Đầu vào  : dataset/danh_sach.csv (bước 1)
@@ -30,22 +30,28 @@ TI_LE_TEST = 0.25          # mặc định: 25% mỗi người làm test
 
 # ======================= 2.2 CHIA DỮ LIỆU =======================
 def chia(df):
-    """Trả về cột "tap" (train / test / nguoi_la) cho từng ảnh. Chia riêng từng (nguồn, người)."""
-    tap = pd.Series("", index=df.index)                      # cột kết quả, ban đầu để trống
-    tap[df["vai_tro"] == "nguoi_la"] = "nguoi_la"            # người lạ: chỉ để test
-    biet = df[df["vai_tro"] == "biet"]                       # người quen: mô hình phải nhận ra
-    for _, nhom in biet.groupby(["nguon", "ten"]):
-        if len(nhom) == 1:
-            tap[nhom.index] = "train"
-        else:
-            # Chia ngẫu nhiên, giữ ít nhất một ảnh test trong mỗi nhóm có từ hai ảnh.
-            so_test = max(1, round(TI_LE_TEST * len(nhom)))
-            idx_train, idx_test = train_test_split(nhom.index, test_size=so_test,
-                                                   random_state=C.RANDOM_STATE)
-            tap[idx_train] = "train"
-            tap[idx_test] = "test"
-    return tap
+    """Chia ảnh người quen theo (nguon, ten); người lạ gán tap = 'nguoi_la'."""
+    df = df.copy()
+    df["tap"] = ""
+    df.loc[df["vai_tro"] == "nguoi_la", "tap"] = "nguoi_la"
 
+    for (nguon, ten), nhom in df[df["vai_tro"] == "biet"].groupby(["nguon", "ten"]):
+        if len(nhom) == 1:
+            df.loc[nhom.index, "tap"] = "train"
+            continue
+        so_test = max(1, round(TI_LE_TEST * len(nhom)))
+        strat = None
+        if nguon == "tu_thu" and "tu_the" in nhom.columns:
+            dem = nhom["tu_the"].value_counts()
+            if dem.min() >= 2 and so_test >= len(dem):
+                strat = nhom["tu_the"]
+        idx_tr, idx_te = train_test_split(
+            nhom.index, test_size=so_test,
+            random_state=C.RANDOM_STATE, stratify=strat,
+        )
+        df.loc[idx_tr, "tap"] = "train"
+        df.loc[idx_te, "tap"] = "test"
+    return df["tap"]
 
 # =====================================================================
 def main():

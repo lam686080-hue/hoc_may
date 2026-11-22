@@ -16,7 +16,7 @@
             5.4 Đường ROC và AUC
             5.5 Phân tích lỗi: theo nguồn ảnh, theo tư thế, từng người, ảnh nhận sai
             5.6 Người lạ: chọn ngưỡng để FAR và FRR gần nhau nhất trên bộ ảnh dùng chọn ngưỡng
-            5.7 Học lại hồi quy logistic trên toàn bộ dữ liệu, lưu cho bước 6
+            5.7 Lưu mô hình bước 3 với ngưỡng đã chọn cho bước 6
             5.8 Tạo trang xem kết quả
  Chạy     : python buoc5_danh_gia.py
 =====================================================================
@@ -30,7 +30,6 @@ import numpy as np
 import pandas as pd
 import joblib
 import seaborn as sns                                   # vẽ ma trận nhầm lẫn (heatmap)
-from sklearn.base import clone                          # tạo bản sao mô hình chưa học
 from sklearn.metrics import (accuracy_score, precision_recall_fscore_support, classification_report,
                              confusion_matrix, roc_curve, auc)
 from sklearn.preprocessing import label_binarize       # đổi tên người -> dạng 0/1 cho ROC
@@ -120,7 +119,7 @@ def ve_roc(y_test, P_test, lop, ten_mo_hinh):
 
 # ======================= 5.5 PHÂN TÍCH LỖI =======================
 def phan_tich_loi(X_test, y_test, y_doan, tu_the, nguon, ten_mo_hinh):
-    # (a) độ chính xác theo nguồn ảnh: tự thu và LFW
+    # (a) độ chính xác theo nguồn ảnh: tự thu
     ds = [n for n in C.NGUON if (nguon == n).any()]
     acc = [accuracy_score(y_test[nguon == n], y_doan[nguon == n]) * 100 for n in ds]
     print("  Theo nguồn ảnh: " + ", ".join(f"{C.NGUON[n][0]} {a:.0f}%" for n, a in zip(ds, acc)))
@@ -150,10 +149,37 @@ def phan_tich_loi(X_test, y_test, y_doan, tu_the, nguon, ten_mo_hinh):
 
 
 # ======================= 5.6 NGƯỠNG NGƯỜI LẠ =======================
+def kiem_tra_nguoi_la(data, mh, nguong):
+    names = data["nguoi_la_file"]
+    status = data["nguoi_la_status"]
+    faces = data["nguoi_la"]
+    rows = []
+    if len(faces):
+        xs = iter(mh.predict_proba(C.vector_hoa(faces)))
+    for name, state in zip(names, status):
+        label, score = "", ""
+        if state == "ok":
+            probs = next(xs)
+            i = probs.argmax()
+            score = float(probs[i])
+            if score >= nguong:
+                state, label = "nhan_nham", mh.classes_[i]
+            else:
+                state, label = "tu_choi_dung", "Nguoi la"
+        rows.append((name, state, label, score))
+    bang = pd.DataFrame(rows, columns=["file", "trang_thai", "du_doan", "xac_suat_cao_nhat"])
+    bang.to_csv(Path(C.KET_QUA) / "test_nguoi_la.csv", index=False, encoding="utf-8-sig")
+    sai = (bang.trang_thai == "nhan_nham").sum()
+    print(f"  Kiểm tra người lạ: nhận nhầm {sai}/{len(faces)}, bỏ qua {len(names)-len(faces)} ảnh")
+    return f"{sai}/{len(faces)}" if len(faces) else "Chưa có ảnh hợp lệ"
+
+
 def chon_nguong(P_test, dung, P_la, X_la, lop):
     """Xác suất cao nhất < ngưỡng -> "Người lạ".
     FRR = tỉ lệ người QUEN bị từ chối | FAR = tỉ lệ người LẠ bị nhận nhầm. Chọn ngưỡng có chênh lệch FAR và FRR nhỏ nhất."""
     if len(P_la) == 0:
+        for ten in ("5_nguoi_la.png", "5_nguoi_la_anh.png"):
+            (Path(C.KET_QUA) / ten).unlink(missing_ok=True)
         print("  Không có ảnh người lạ -> dùng ngưỡng mặc định 0.6")
         return 0.6, None, None
     p_quen, p_la = P_test.max(1), P_la.max(1)                  # xác suất cao nhất của mỗi ảnh
@@ -237,13 +263,12 @@ def main():
         raise SystemExit("Hãy chạy lại bước 4 với bản hồi quy logistic.")
     y_doan, ms = d["du_doan"], float(d["ms_moi_anh"])
     lop, y_test = list(d["lop"]), d["y_test"]
-    P_test, P_la = d["P_test"], d["P_la"]
+    P_test = d["P_test"]
     X, df = C.doc_du_lieu()
     vi_tri = {f: i for i, f in enumerate(df["file"])}            # tên file -> số thứ tự hàng
     i_test = np.array([vi_tri[f] for f in d["file_test"]], dtype=int)
-    i_la = np.array([vi_tri[f] for f in d["file_la"]], dtype=int)
     cv = pd.read_csv(C.FILE_KET_QUA_CV, encoding="utf-8-sig")
-    print(f"  {ten_mo_hinh} | {len(y_test)} ảnh kiểm tra | {len(i_la)} ảnh người lạ")
+    print(f"  {ten_mo_hinh} | {len(y_test)} ảnh kiểm tra")
 
     print("\n5.2 Đánh giá trên tập kiểm tra")
     bang = tinh_do_do(ten_mo_hinh, y_doan, y_test, ms, cv)
@@ -261,14 +286,29 @@ def main():
                   df["nguon"].to_numpy()[i_test], ten_mo_hinh)
 
     print("\n5.6 Chọn ngưỡng người lạ")
-    dung = np.array(lop)[P_test.argmax(1)] == y_test               # ảnh người quen đoán đúng
-    nguong, far, frr = chon_nguong(P_test, dung, P_la, X[i_la], lop)
-
-    print("\n5.7 Học lại hồi quy logistic trên toàn bộ ảnh người quen, lưu cho bước 6")
     goi = joblib.load(C.FILE_HOI_QUY_LOGISTIC)
-    biet = (df["vai_tro"] == "biet").to_numpy()
-    mh = clone(goi["mo_hinh"])                    # cùng tham số tốt nhất, chưa học
-    mh.fit(X[biet], df.loc[biet, "ten"].to_numpy())          # học trên train + test (hết dữ liệu)
+    mh = goi["mo_hinh"]
+    with np.load(C.FILE_ANH) as data:
+        if "nguoi_la_chon_nguong" not in data:
+            raise SystemExit("Chạy lại từ bước 1 để chuẩn bị ảnh người lạ.")
+        faces = data["nguoi_la_chon_nguong"]
+        X_la = C.vector_hoa(faces) if len(faces) else []
+    P_la = mh.predict_proba(X_la) if len(X_la) else np.empty((0, len(lop)))
+    # Giữ lại một nửa ảnh test của từng người để đánh giá ngưỡng độc lập.
+    chia = np.random.default_rng(C.RANDOM_STATE)
+    hieu_chinh = np.zeros(len(y_test), dtype=bool)
+    for ten in lop:
+        indices = chia.permutation(np.flatnonzero(y_test == ten))
+        hieu_chinh[indices[:len(indices) // 2]] = True
+    P_quen = mh.predict_proba(X[i_test])
+    dung = np.asarray(mh.classes_)[P_quen.argmax(1)] == y_test
+    nguong, far, frr = chon_nguong(P_quen[hieu_chinh], dung[hieu_chinh], P_la, X_la, lop)
+    with np.load(C.FILE_ANH) as data:
+        nhan_nham_la = kiem_tra_nguoi_la(data, mh, nguong)
+    kiem_tra = ~hieu_chinh
+    dung_sau_nguong = int(((P_quen.max(1) >= nguong) & dung & kiem_tra).sum())
+    print(f"  Kiểm tra người quen sau ngưỡng: {dung_sau_nguong}/{kiem_tra.sum()} ảnh nhận đúng")
+    print("5.7 Lưu mô hình bước 3 và ngưỡng cho bước 6")
     acc = float(bang.loc[bang["mo_hinh"] == ten_mo_hinh, "test_%"].iloc[0])
     joblib.dump({"mo_hinh": mh, "ten_mo_hinh": ten_mo_hinh, "nguoi_diem_danh": goi["nguoi_diem_danh"],
                  "nguong_nguoi_la": nguong, "do_chinh_xac_test": acc},
@@ -277,12 +317,16 @@ def main():
                "Tham số": bang.loc[bang["mo_hinh"] == ten_mo_hinh, "tham_so"].iloc[0],
                "Độ chính xác test (%)": acc, "Số thành phần PCA": goi["so_thanh_phan_pca"],
                "Ngưỡng người lạ": nguong,
+               "Cách chọn ngưỡng": "Cân bằng FAR/FRR" if len(X_la) else "Mặc định (chưa hiệu chỉnh)",
+               "Ảnh lạ dùng chọn ngưỡng": len(X_la),
+               "Ảnh lạ kiểm tra bị nhận nhầm": nhan_nham_la,
+               "Ảnh quen kiểm tra nhận đúng sau ngưỡng": f"{dung_sau_nguong}/{kiem_tra.sum()}",
                "FAR / FRR trên ảnh dùng chọn ngưỡng (%)": "-" if far is None
                else f"{far * 100:.1f} / {frr * 100:.1f}",
                "Người được điểm danh (trong lớp)": ", ".join(goi["nguoi_diem_danh"]) or "-"}
     with open(os.path.join(C.MO_HINH, "thong_tin.json"), "w", encoding="utf-8") as f:
         json.dump({k: str(v) for k, v in tom_tat.items()}, f, ensure_ascii=False, indent=2)
-    print(f"  {ten_mo_hinh}: học lại trên {int(biet.sum())} ảnh -> mo_hinh/mo_hinh_tot_nhat.joblib")
+    print(f"  {ten_mo_hinh}: đã huấn luyện trên {(df.tap == 'train').sum()} ảnh -> mo_hinh/mo_hinh_tot_nhat.joblib")
 
     print("\n5.8 Tạo trang xem kết quả")
     tao_trang_xem(bang, tom_tat)

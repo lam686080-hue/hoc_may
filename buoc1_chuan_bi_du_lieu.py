@@ -3,39 +3,31 @@
  BƯỚC 1 – CHUẨN BỊ DỮ LIỆU
  Phụ trách: Thành viên 1 – Bùi Trung Hiếu
 =====================================================================
- Làm gì   : Gom ảnh mặt từ ảnh tự thu và LFW, đưa về CÙNG một dạng (căn chỉnh 5 điểm, xám 100x100,
+ Làm gì   : Đọc ảnh mặt tự thu, đưa về CÙNG một dạng (căn chỉnh 5 điểm, xám 100x100,
             lọc Gaussian + CLAHE), thống kê + vẽ biểu đồ, lưu lại cho các bước sau.
  Đầu vào  : dataset/mat_xam_100/<Tên>/*.png    ảnh nhóm tự thu bằng thu_anh.py (đã căn chỉnh)
-            Bộ LFW (tải nếu chưa có, ~230 MB)
  Đầu ra   : dataset/du_lieu_anh.npz   tất cả ảnh đã tiền xử lý (N x 100 x 100)
             dataset/danh_sach.csv     mỗi dòng 1 ảnh: file, tên, nguồn, lượt, tư thế, vai trò
             ket_qua/1_*.png           biểu đồ cho báo cáo
- Các bước : 1.1 Đọc ảnh tự thu và gán vai trò
-            1.2 Chuẩn bị ảnh LFW (tải + căn chỉnh giống hệt ảnh tự thu)
-            1.3 Tiền xử lý: lọc Gaussian + cân bằng sáng CLAHE
-            1.4 Thống kê và trực quan hóa
-            1.5 Lưu dữ liệu
+ Các bước : 1.1 Đọc ảnh tự thu của người quen
+            1.2 Tiền xử lý: lọc Gaussian + cân bằng sáng CLAHE
+            1.3 Thống kê và trực quan hóa
+            1.4 Lưu dữ liệu
  Chạy     : python buoc1_chuan_bi_du_lieu.py
-            python buoc1_chuan_bi_du_lieu.py --chuan-bi   (chỉ chuẩn bị bộ LFW đã căn chỉnh)
 =====================================================================
 """
 import os
-import sys
 import glob
+from contextlib import ExitStack
+from pathlib import Path
+import cv2
+import mediapipe as mp
+import thu_anh as T
 
 import numpy as np
 import pandas as pd
 import chung as C
-from chung import plt, cv2
-
-# ======================= CẤU HÌNH BƯỚC 1 =======================
-LFW_SO_ANH_TOI_THIEU = 70     # lấy người có >= 70 ảnh trong LFW -> 7 người
-LFW_TOI_DA_MOI_NGUOI = 150    # mỗi người LFW lấy tối đa 150 ảnh
-LFW_SO_NGUOI_LA = 30          # 30 người LFW khác làm "người lạ" (chỉ để test)
-LFW_ANH_MOI_NGUOI_LA = 5      # mỗi người lạ lấy 5 ảnh
-SO_ANH_TOI_THIEU = 5          # người trong lớp có < 5 ảnh: chưa đủ để học -> làm người lạ (test)
-CHI_LAM_NGUOI_LA = []         # tên người chỉ dùng làm người lạ, vd ["Tran_Van_A"]
-
+from chung import plt
 
 # ======================= 1.1 ĐỌC ẢNH TỰ THU =======================
 def doc_anh_tu_thu():
@@ -64,116 +56,7 @@ def doc_anh_tu_thu():
     return dong
 
 
-def gan_vai_tro(dong):
-    """Người trong lớp có < SO_ANH_TOI_THIEU ảnh (tự thu) chưa đủ để học
-    -> chỉ dùng làm NGƯỜI LẠ (test). Người trong CHI_LAM_NGUOI_LA cũng vậy."""
-    dem = pd.Series([d["ten"] for d in dong], dtype=str).value_counts()
-    it_anh = sorted(t for t, n in dem.items() if n < SO_ANH_TOI_THIEU)
-    for d in dong:
-        if d["ten"] in it_anh or d["ten"] in CHI_LAM_NGUOI_LA:
-            d["vai_tro"] = "nguoi_la"
-    if it_anh:
-        print(f"  ! Chưa đủ {SO_ANH_TOI_THIEU} ảnh -> tạm làm người lạ: "
-              + ", ".join(f"{t} ({dem[t]})" for t in it_anh))
-    return dong
-
-
-# ======================= 1.2 CHUẨN BỊ ẢNH LFW =======================
-def tao_bo_tim_mat(so_mat):
-    """MediaPipe Face Landmarker chế độ IMAGE (ảnh tĩnh): tìm mặt + 478 điểm mốc."""
-    import thu_anh as T
-    from mediapipe.tasks import python as mp_python
-    from mediapipe.tasks.python import vision
-    return vision.FaceLandmarker.create_from_options(vision.FaceLandmarkerOptions(
-        base_options=mp_python.BaseOptions(model_asset_buffer=T.tai_model()),
-        running_mode=vision.RunningMode.IMAGE, num_faces=so_mat,
-        min_face_detection_confidence=0.5, min_face_presence_confidence=0.5))
-
-
-def tim_mat(lm, bgr):
-    """Trả về danh sách các mặt; mỗi mặt là mảng 478 điểm (tọa độ pixel trên ảnh bgr)."""
-    import mediapipe as mp
-    H, W = bgr.shape[:2]
-    s = min(1.0, 1600 / max(H, W))                      # ảnh rất lớn: thu nhỏ cho MediaPipe nhanh
-    nho = bgr if s == 1 else cv2.resize(bgr, (round(W * s), round(H * s)),
-                                        interpolation=cv2.INTER_AREA)
-    rgb = cv2.cvtColor(nho, cv2.COLOR_BGR2RGB)          # MediaPipe cần ảnh RGB
-    kq = lm.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb))
-    # tọa độ MediaPipe là tỉ lệ 0..1 -> nhân với kích thước ảnh GỐC ra pixel
-    return [np.array([(p.x * W, p.y * H) for p in m]) for m in kq.face_landmarks]
-
-
-def thu_muc_lfw_goc():
-    """Thư mục ảnh LFW gốc (mỗi người 1 thư mục); None nếu chưa tải."""
-    for p in (os.path.join(C.THU_MUC_LFW_GOC, "lfw_home", "lfw_funneled"),      # tải tự động
-              os.path.join(C.THU_MUC_LFW_GOC, "lfw_funneled"),                  # giải nén tay
-              os.path.join(os.path.expanduser("~"), "scikit_learn_data", "lfw_home",
-                           "lfw_funneled")):
-        if os.path.isdir(os.path.join(p, "George_W_Bush")):
-            return p
-    return None
-
-
-def chuan_bi_lfw():
-    """Tải LFW -> chọn người -> MediaPipe tìm mặt -> căn chỉnh 5 điểm GIỐNG HỆT ảnh tự thu
-    -> lưu dataset/lfw_xam_100. Chỉ làm 1 lần, các lần sau dùng lại."""
-    p_ds = os.path.join(C.THU_MUC_LFW, "danhsachfwl.csv")
-    if os.path.exists(p_ds):
-        print("  Đã có ảnh LFW căn chỉnh sẵn")
-        return
-    if thu_muc_lfw_goc() is None:
-        print("  Đang tải bộ LFW (~230 MB, chỉ 1 lần)...")
-        from sklearn.datasets import fetch_lfw_people   # hàm tải bộ LFW của scikit-learn
-        try:
-            fetch_lfw_people(data_home=C.THU_MUC_LFW_GOC, min_faces_per_person=LFW_SO_ANH_TOI_THIEU,
-                             resize=0.1)
-        except Exception as e:
-            print(f"  ! Không tải được: {e}")
-    goc = thu_muc_lfw_goc()
-    if goc is None:
-        raise SystemExit("Chưa có LFW: tải tay lfw-funneled.tgz tại "
-                         "https://ndownloader.figshare.com/files/5976015, giải nén vào dataset/du_lieu_lfw")
-    import thu_anh as T
-    rng = np.random.default_rng(C.RANDOM_STATE)
-    thu_muc_nguoi = sorted(n for n in os.listdir(goc) if os.path.isdir(os.path.join(goc, n)))
-    so_anh = {n: len(os.listdir(os.path.join(goc, n))) for n in thu_muc_nguoi}
-    biet = [n for n, s in so_anh.items() if s >= LFW_SO_ANH_TOI_THIEU]
-    con_lai = [n for n, s in so_anh.items() if 5 <= s < LFW_SO_ANH_TOI_THIEU]
-    la = sorted(rng.choice(con_lai, size=min(LFW_SO_NGUOI_LA, len(con_lai)), replace=False))
-    # kế hoạch: (người, vai trò, số ảnh tối đa)
-    ke_hoach = ([(n, "biet", LFW_TOI_DA_MOI_NGUOI) for n in biet]
-                + [(n, "nguoi_la", LFW_ANH_MOI_NGUOI_LA) for n in la])
-    lm, dong = tao_bo_tim_mat(so_mat=3), []
-    for n, vai_tro, toi_da in ke_hoach:
-        files = sorted(os.listdir(os.path.join(goc, n)))
-        for fn in sorted(rng.choice(files, size=min(toi_da, len(files)), replace=False)):
-            bgr = T.doc_anh(os.path.join(goc, n, fn))
-            cac_mat = tim_mat(lm, bgr) if bgr is not None else []
-            if not cac_mat:                             # không đọc được / không thấy mặt -> bỏ
-                continue
-            H, W = bgr.shape[:2]
-            # nhiều mặt -> lấy mặt gần tâm ảnh nhất (LFW luôn đặt người được gán nhãn ở giữa)
-            diem = min(cac_mat, key=lambda d: np.hypot(*(d.mean(0) - (W / 2, H / 2))))
-            mat = T.can_chinh_mat(bgr, T.diem_5(diem), C.KICH_THUOC)
-            ten_file = os.path.splitext(fn)[0]
-            C.luu_png(os.path.join(C.THU_MUC_LFW, n, ten_file + ".png"),
-                      cv2.cvtColor(mat, cv2.COLOR_BGR2GRAY))
-            dong.append({"file": ten_file, "ten": n, "vai_tro": vai_tro})
-    lm.close()
-    pd.DataFrame(dong).to_csv(p_ds, index=False)
-    print(f"  LFW: {len(dong)} ảnh ({len(biet)} người quen, {len(la)} người lạ) -> lfw_xam_100")
-
-
-def doc_anh_lfw():
-    p_ds = os.path.join(C.THU_MUC_LFW, "danhsachfwl.csv")
-    lfw = pd.read_csv(p_ds, dtype=str)
-    dong = [{"duong_dan": os.path.join(C.THU_MUC_LFW, r.ten, r.file + ".png"), "file": r.file,
-             "ten": r.ten, "nguon": "lfw", "luot": 0, "tu_the": "", "vai_tro": r.vai_tro} for r in lfw.itertuples()]
-    print(f"  Ảnh LFW: {len(dong)} ảnh")
-    return dong
-
-
-# ======================= 1.3 TIỀN XỬ LÝ =======================
+# ======================= 1.2 TIỀN XỬ LÝ =======================
 def tien_xu_ly_tat_ca(dong):
     """Đọc từng ảnh -> C.tien_xu_ly (lọc Gaussian + CLAHE). Ảnh hỏng/sai kích thước thì bỏ."""
     anh, giu = [], []
@@ -185,14 +68,13 @@ def tien_xu_ly_tat_ca(dong):
     return np.array(anh, dtype=np.uint8), pd.DataFrame(giu)
 
 
-# ======================= 1.4 THỐNG KÊ, TRỰC QUAN HÓA =======================
+# ======================= 1.3 THỐNG KÊ, TRỰC QUAN HÓA =======================
 def thong_ke_va_ve(df, anh):
     biet = df[df["vai_tro"] == "biet"]
     bang = pd.crosstab(biet["ten"], biet["nguon"])              # số ảnh mỗi người theo từng nguồn
-    bang = bang[[n for n in C.NGUON if n in bang]]             # cột: tự thu và LFW
+    bang = bang[[n for n in C.NGUON if n in bang]]
     bang = bang.sort_values(list(bang.columns), ascending=False)   # người tự thu lên đầu
     print(bang.assign(tong=bang.sum(axis=1)).to_string())
-    print(f"  Người lạ (chỉ test): {(df['vai_tro'] == 'nguoi_la').sum()} ảnh")
 
     # (a) Số ảnh mỗi người: thanh ngang xếp chồng, mỗi nguồn một màu
     ax = bang.rename(columns={n: C.NGUON[n][0] for n in bang}).rename_axis(columns=None).plot.barh(
@@ -241,22 +123,72 @@ def thong_ke_va_ve(df, anh):
 
 
 # =====================================================================
+def doc_mat(path, detector):
+    try:
+        anh = T.doc_anh(str(path))
+    except (cv2.error, OSError):
+        anh = None
+    if anh is None:
+        return "loi_doc", None
+    h, w = anh.shape[:2]
+    if max(h, w) > 1200:
+        scale = 1200 / max(h, w)
+        anh = cv2.resize(anh, (max(1, round(w * scale)), max(1, round(h * scale))),
+                         interpolation=cv2.INTER_AREA)
+    rgb = cv2.cvtColor(anh, cv2.COLOR_BGR2RGB)
+    faces = detector.detect(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)).face_landmarks
+    if len(faces) != 1:
+        return ("nhieu_mat" if faces else "khong_thay_mat"), None
+    h, w = anh.shape[:2]
+    info = T.trich_thong_tin(faces[0], None, w, h)
+    if info is None:
+        return "khong_can_chinh_duoc", None
+    return "ok", C.mat_xam_chuan(anh, info["d5"])
+
+
+def chuan_bi_nguoi_la():
+    data = {}
+    for nhom in ("nguoi_la_chon_nguong", "nguoi_la"):
+        folder = Path(C.DATASET) / nhom
+        folder.mkdir(exist_ok=True)
+        files = sorted(p for p in folder.rglob("*") if p.is_file() and
+                       p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"})
+        names, status, faces = [], [], []
+        with ExitStack() as resources:
+            detector = None
+            for path in files:
+                rel = path.relative_to(folder)
+                if nhom == "nguoi_la_chon_nguong" and rel.parts[0] == "lfw_xam_100":
+                    # Ảnh này đã căn 5 điểm và chuyển xám khi chuẩn bị LFW.
+                    gray = C.doc_anh_xam(str(path))
+                    face = None
+                    state = "loi_anh_can_chinh"
+                    if gray is not None and gray.shape == (C.KICH_THUOC, C.KICH_THUOC):
+                        face = C.tien_xu_ly(gray)
+                        state = "ok"
+                else:
+                    if detector is None:
+                        detector = resources.enter_context(T.tao_landmarker("image"))
+                    state, face = doc_mat(path, detector)
+                names.append(rel.as_posix())
+                status.append(state)
+                if face is not None:
+                    faces.append(face)
+        print(f"  {nhom}: {len(faces)}/{len(files)} ảnh hợp lệ")
+        data[nhom] = np.asarray(faces, dtype=np.uint8).reshape(-1, C.KICH_THUOC, C.KICH_THUOC)
+        data[nhom + "_file"] = np.asarray(names, dtype=str)
+        data[nhom + "_status"] = np.asarray(status, dtype=str)
+    return data
+
+
 def main():
-    chi_chuan_bi = "--chuan-bi" in sys.argv
     print("=" * 70)
     print(" BƯỚC 1 – CHUẨN BỊ DỮ LIỆU")
     print("=" * 70)
     print("\n1.1 Đọc ảnh tự thu (thu_anh.py)")
-    dong = gan_vai_tro(doc_anh_tu_thu())
+    dong = doc_anh_tu_thu()
 
-    print("\n1.2 Chuẩn bị ảnh LFW")
-    chuan_bi_lfw()
-    if chi_chuan_bi:
-        print("\nXong phần chuẩn bị (--chuan-bi).")
-        return
-    dong += doc_anh_lfw()
-
-    print("\n1.3 Tiền xử lý (lọc Gaussian + CLAHE)")
+    print("\n1.2 Tiền xử lý (lọc Gaussian + CLAHE)")
     anh, df = tien_xu_ly_tat_ca(dong)
     print(f"  {len(anh)} ảnh -> mảng {anh.shape} (mỗi ảnh sẽ thành vector 10.000 chiều)")
     if df.empty:
@@ -264,12 +196,12 @@ def main():
     if df.loc[df["vai_tro"] == "biet", "ten"].nunique() < 2:
         raise SystemExit("Cần ít nhất 2 người quen để phân loại. Thêm ảnh cho người quen.")
 
-    print("\n1.4 Thống kê và trực quan hóa")
+    print("\n1.3 Thống kê và trực quan hóa")
     thong_ke_va_ve(df, anh)
 
-    print("\n1.5 Lưu dữ liệu")
+    print("\n1.4 Lưu dữ liệu")
     os.makedirs(C.DATASET, exist_ok=True)
-    np.savez_compressed(C.FILE_ANH, anh=anh)                   # lưu mảng ảnh (nén)
+    np.savez_compressed(C.FILE_ANH, anh=anh, **chuan_bi_nguoi_la())                   # lưu mảng ảnh (nén)
     df.drop(columns="duong_dan").to_csv(C.FILE_DANH_SACH, index=False)
     print("  -> dataset/du_lieu_anh.npz\n  -> dataset/danh_sach.csv")
     print("\nXong bước 1. Tiếp theo: python buoc2_chia_du_lieu.py")

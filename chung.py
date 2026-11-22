@@ -8,9 +8,8 @@
      (camera thật) – bài giảng: dữ liệu mới phải xử lý như tập train.
    - Hình vẽ cùng một kiểu, lưu vào thư mục ket_qua/.
 
- Hai nguồn ảnh (cột "nguon" trong danh_sach.csv):
+ Nguồn ảnh (cột "nguon" trong danh_sach.csv):
    tu_thu   : ảnh nhóm tự thu bằng thu_anh.py      dataset/mat_xam_100/<Tên>/
-   lfw      : bộ ảnh công khai LFW                  dataset/lfw_xam_100/<Tên>/
 
  Dữ liệu đi qua các bước:
    Bước 1 -> dataset/du_lieu_anh.npz + dataset/danh_sach.csv
@@ -38,8 +37,6 @@ import matplotlib.pyplot as plt
 THU_MUC = os.path.dirname(os.path.abspath(__file__))
 DATASET = os.path.join(THU_MUC, "dataset")
 THU_MUC_TU_THU = os.path.join(DATASET, "mat_xam_100")         # ảnh mặt tự thu (thu_anh.py)
-THU_MUC_LFW = os.path.join(DATASET, "lfw_xam_100")            # ảnh LFW đã căn chỉnh (bước 1 tạo)
-THU_MUC_LFW_GOC = os.path.join(DATASET, "du_lieu_lfw")        # bộ LFW gốc tải về (~230 MB)
 KET_QUA = os.path.join(THU_MUC, "ket_qua")                    # hình và bảng kết quả
 MO_HINH = os.path.join(THU_MUC, "mo_hinh")                    # mô hình đã huấn luyện
 
@@ -58,9 +55,8 @@ CLAHE_LUOI = 8            # CLAHE chia ảnh thành lưới 8 x 8 ô
 RANDOM_STATE = 42         # cố định yếu tố ngẫu nhiên -> chạy lại ra cùng kết quả
 TEN_TU_THE = {"thang": "Nhìn thẳng", "trai": "Quay trái", "phai": "Quay phải",
               "len": "Ngẩng lên", "xuong": "Cúi xuống"}
-# 2 nguồn ảnh: tên hiển thị + màu dùng chung cho mọi biểu đồ
-NGUON = {"tu_thu": ("Tự thu (thu_anh.py)", "darkorange"),
-         "lfw": ("LFW (ảnh báo chí)", "steelblue")}
+# Nguồn ảnh: tên hiển thị + màu dùng chung cho mọi biểu đồ
+NGUON = {"tu_thu": ("Tự thu (thu_anh.py)", "darkorange")}
 TRONG_LOP = ("tu_thu",)   # người trong lớp: được hiện tên + điểm danh ở bước 6
 
 _clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP, tileGridSize=(CLAHE_LUOI, CLAHE_LUOI))
@@ -74,6 +70,12 @@ def tien_xu_ly(anh_xam):
     2) CLAHE            : cân bằng sáng theo từng ô 8x8 -> nửa mặt tối được làm rõ"""
     anh = cv2.GaussianBlur(anh_xam, (0, 0), LAM_MO)
     return _clahe.apply(anh)
+
+
+def mat_xam_chuan(anh, d5):
+    from thu_anh import can_chinh_mat
+    mat = can_chinh_mat(anh, d5, KICH_THUOC)
+    return tien_xu_ly(cv2.cvtColor(mat, cv2.COLOR_BGR2GRAY))
 
 
 def vector_hoa(cac_anh):

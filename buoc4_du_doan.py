@@ -85,15 +85,20 @@ def main():
           f"người lạ: {int(la.sum())} ảnh")
 
     print("\n4.2 Hồi quy logistic dự đoán tập test")
+    lop = np.array(mh.classes_)
     bat_dau = time.perf_counter()
-    du_doan = mh.predict(X_test)
+    P_test = mh.predict_proba(X_test)
+    du_doan = lop[np.argmax(P_test, axis=1)]
     ms = (time.perf_counter() - bat_dau) * 1000 / len(X_test)
+    so_mau = min(50, len(X_test))
+    bat_dau_don = time.perf_counter()
+    for i in range(so_mau):
+        mh.predict_proba(X_test[i:i+1])
+    ms_don = (time.perf_counter() - bat_dau_don) * 1000 / so_mau
     acc = accuracy_score(y_test, du_doan)
-    print(f"  Độ chính xác {acc:.1%} | {ms:.2f} ms/ảnh")
+    print(f"  Độ chính xác {acc:.1%} | batch {ms:.2f} ms/ảnh | đơn lẻ {ms_don:.2f} ms/ảnh") 
 
     print("\n4.3 Xác suất của hồi quy logistic")
-    lop = np.array(mh.classes_)                              # thứ tự người ứng với các cột xác suất
-    P_test = mh.predict_proba(X_test)                        # xác suất thuộc từng người (tổng = 1)
     P_la = mh.predict_proba(X[la]) if la.any() else np.zeros((0, len(lop)))
     p_doan = P_test.max(axis=1)
     print(f"  Xác suất cao nhất trung bình: người quen {P_test.max(1).mean():.2f}"
