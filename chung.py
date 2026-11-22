@@ -83,6 +83,17 @@ def vector_hoa(cac_anh):
     (giống hàm vectorize_img trong ví dụ AR Face của bài giảng)."""
     return cac_anh.reshape(len(cac_anh), -1).astype(np.float32)
 
+_hog = cv2.HOGDescriptor((KICH_THUOC, KICH_THUOC), (20, 20), (10, 10), (10, 10), 9)
+def trich_hog(X):
+   """Trích đặc trưng HOG từ ma trận ảnh phẳng (N, 10000)."""
+   X = np.asarray(X)
+    if X.ndim == 1:
+         X = X[None, :]
+    out = np.empty((len(X), _hog.getDescriptorSize()), dtype=np.float32)
+    for i, hang in enumerate(X):
+         anh = np.clip(hang, 0, 255).astype(np.uint8).reshape(KICH_THUOC, KICH_THUOC)
+        out[i] = _hog.compute(anh).ravel()
+    return out
 
 # ============================ ĐỌC / GHI ============================
 def doc_du_lieu():
