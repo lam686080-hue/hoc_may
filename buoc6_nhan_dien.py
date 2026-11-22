@@ -39,7 +39,7 @@ from mediapipe.tasks.python import vision
 import thu_anh as T          # dùng lại: camera, xoay hình, góc đầu, căn chỉnh mặt 5 điểm
 
 # ============================ CẤU HÌNH ============================
-NGUONG_NGUOI_LA = None             # None = dùng ngưỡng bước 5 đã chọn; hoặc đặt tay, vd 0.5
+NGUONG_NGUOI_LA = 0.60             # None = dùng ngưỡng bước 5 đã chọn; hoặc đặt tay, vd 0.5
 SO_MAT_TOI_DA = 4                  # nhận diện tối đa 4 người cùng lúc
 LAM_MUOT = 0.75                    # làm mượt xác suất qua các khung hình (0 = không làm mượt)
 GIU_MAT = 0.7                      # mất dấu mặt < 0,7 giây vẫn giữ khung + tên (chống nhấp nháy)
