@@ -24,6 +24,8 @@ import sys
 import csv
 import time
 import threading
+import json
+import urllib.request
 from contextlib import ExitStack
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -212,9 +214,62 @@ def hien_thi(anh, che_do_web):
     cv2.imshow(TEN_CUA_SO, anh)
     return (cv2.waitKey(1) & 0xFF) in (ord("q"), 27)
 
+class GuiServer:
+    """Gửi khung hình JPEG và kết quả JSON sang Flask server (nhom11nhandienkhuonmat/server.py)."""
+    def __init__(self, url):
+        self.url = url.rstrip("/")
+        self._khoa = threading.Lock()
+        self._jpg = None
+        self._data = None
+        self._chay = True
+        threading.Thread(target=self._vong_gui, daemon=True).start()
+
+    def cap_nhat(self, anh, cac_mat):
+        ok, buf = cv2.imencode(".jpg", anh, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        if not ok:
+            return
+        if cac_mat:
+            m = max(cac_mat, key=lambda x: float(x["xs"].max()) if x.get("xs") is not None else 0.0)
+            ten = m.get("ten", "Nguoi la")
+            conf = round(float(m["xs"].max()), 4) if m.get("xs") is not None else 0.0
+        else:
+            ten, conf = "Khong co khuon mat", 0.0
+        payload = {"name": ten, "confidence": conf, "count": len(cac_mat)}
+        with self._khoa:
+            self._jpg = buf.tobytes()
+            self._data = json.dumps(payload).encode("utf-8")
+
+    def _vong_gui(self):
+        while self._chay:
+            with self._khoa:
+                jpg, data = self._jpg, self._data
+                self._jpg, self._data = None, None
+            if jpg is not None:
+                try:
+                    req = urllib.request.Request(
+                        f"{self.url}/upload_frame", data=jpg,
+                        headers={"Content-Type": "image/jpeg"}, method="POST"
+                    )
+                    urllib.request.urlopen(req, timeout=1.5).close()
+                except Exception:
+                    pass
+            if data is not None:
+                try:
+                    req = urllib.request.Request(
+                        f"{self.url}/receive", data=data,
+                        headers={"Content-Type": "application/json"}, method="POST"
+                    )
+                    urllib.request.urlopen(req, timeout=1.5).close()
+                except Exception:
+                    pass
+            time.sleep(0.08)
+    
+    def dong(self):
+        self._chay = False
 
 def main():
     che_do_web = "--web" in sys.argv
+    url_server = sys.argv[sys.argv.index("--server") + 1] if "--server" in sys.argv and sys.argv.index("--server") + 1 < len(sys.argv) else None
     print("=" * 70)
     print(" BƯỚC 6 – NHẬN DIỆN THỜI GIAN THỰC" + (" (chế độ web)" if che_do_web else ""))
     print("=" * 70)
@@ -239,7 +294,12 @@ def main():
                 return
             xoay = x if ok else xoay
         print(f"   Chiều camera: {T.TEN_XOAY.get(xoay, xoay)}")
-        if che_do_web:
+        gui = None
+        if url_server is not None:
+            gui = GuiServer(url_server)
+            tai_nguyen.callback(gui.dong)
+            print(f"Dang gui khung hinh + JSON sang: {url_server}")
+        elif che_do_web:
             sv = tai_nguyen.enter_context(ThreadingHTTPServer(("0.0.0.0", CONG_WEB), XuLyWeb))
             threading.Thread(target=sv.serve_forever, daemon=True).start()
             tai_nguyen.callback(sv.shutdown)
@@ -278,7 +338,10 @@ def main():
                     rgb = cv2.cvtColor(cv2.resize(raw, (int(W * s), int(H * s))), cv2.COLOR_BGR2RGB)
                     ts = max(int((time.perf_counter() - t0) * 1000), ts + 1)   # thời điểm (ms) tăng
                     kq = lm.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
-                    hien = nd.ve(raw, nd.xu_ly(raw, kq), fps)               # 6.4 -> 6.6
+                cac_mat = nd.xu_ly(raw, kq)
+                hien = nd.ve(raw, cac_mat, fps)                 # 6.4 -> 6.6
+                if gui is not None:
+                    gui.cap_nhat(hien, cac_mat)
                 except Exception as e:
                     so_loi += 1
                     if so_loi <= 5:                     # chỉ in vài lỗi đầu cho đỡ rối màn hình
