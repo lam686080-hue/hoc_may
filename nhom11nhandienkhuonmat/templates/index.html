@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JETSON ORIN AI CAMERA</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<div class="dashboard">
+    <header class="header">
+        <div class="brand">
+            <div class="logo">AI</div>
+            <div>
+                <h1>JETSON ORIN</h1>
+                <p>HỆ THỐNG GIÁM SÁT NHẬN DIỆN</p>
+            </div>
+        </div>
+
+        <div class="server-status">
+            <span class="status-dot"></span>
+            <span>SERVER ONLINE</span>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <section class="camera-panel">
+            <div class="panel-header">
+                <div>
+                    <span class="eyebrow">Nguồn hình</span>
+                    <h2>Camera trực tiếp</h2>
+                </div>
+                <span class="live-label">● LIVE</span>
+            </div>
+
+            <div class="camera-container">
+                <div class="camera-stage">
+                    <img src="/video" id="camera" alt="">
+                    <div id="camera-message">ĐANG CHỜ HÌNH ẢNH...</div>
+                    <div class="camera-overlay" aria-hidden="true">
+                        <span>CAM 01</span>
+                        <div class="tracking-frame"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="camera-footer">
+                <span>CAMERA WINDOWS</span>
+                <span>LIVE STREAM</span>
+            </div>
+        </section>
+
+        <section class="ai-panel">
+            <div class="panel-header">
+                <div>
+                    <span class="eyebrow">Kết quả</span>
+                    <h2>Nhận diện AI</h2>
+                </div>
+                <span class="ai-label">REALTIME</span>
+            </div>
+
+            <div class="recognition-card">
+                <span class="card-label">KẾT QUẢ NHẬN DIỆN</span>
+                <div id="face-name">--</div>
+                <div id="face-message">Chưa có dữ liệu nhận diện</div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span>ĐỘ TIN CẬY</span>
+                    <strong id="confidence">--</strong>
+                </div>
+                <div class="stat-card">
+                    <span>SỐ NHẬN DIỆN</span>
+                    <strong id="face-count">0</strong>
+                </div>
+            </div>
+
+            <div class="json-card">
+                <div class="json-header">
+                    <span>DỮ LIỆU JSON</span>
+                    <span id="update-time">--:--:--</span>
+                </div>
+                <pre id="ai-data">Đang chờ dữ liệu từ AI...</pre>
+            </div>
+
+            <div class="connection-card">
+                <span>TRẠNG THÁI DỮ LIỆU</span>
+                <strong id="data-status">WAITING</strong>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <span>JETSON ORIN AI SYSTEM</span>
+        <span>FACE RECOGNITION & CAMERA MONITORING</span>
+    </footer>
+
+</div>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+
+</body>
+</html>
