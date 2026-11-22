@@ -14,7 +14,7 @@ import tempfile
 import numpy as np
 import pandas as pd
 import joblib                                                   # lưu / nạp mô hình ra file
-from sklearn.preprocessing import StandardScaler                # chuẩn hóa z = (x - mean) / std
+from sklearn.preprocessing import StandardScaler, FunctionTransformer                # chuẩn hóa z = (x - mean) / std
 from sklearn.decomposition import PCA                           # phân tích thành phần chính
 from sklearn.pipeline import Pipeline                           # ghép nhiều khâu thành 1 mô hình
 from sklearn.model_selection import GridSearchCV, StratifiedKFold
@@ -34,23 +34,29 @@ def phan_tich_pca(X_train, y_train):
     pca = PCA(svd_solver="full").fit(Xs)            # tính TẤT CẢ thành phần chính (vector riêng)
     ti_le = pca.explained_variance_ratio_           # tỉ lệ phương sai của từng thành phần
     tich_luy = np.cumsum(ti_le)
-    k = int(np.searchsorted(tich_luy, GIU_PHUONG_SAI) + 1)            # k nhỏ nhất đạt 95%
+  X_hog = C.trich_hog(X_train)
+    scaler_hog = StandardScaler().fit(X_hog)
+    Xs_hog = scaler_hog.transform(X_hog)
+    pca_hog = PCA(svd_solver="full", random_state=C.RANDOM_STATE).fit(Xs_hog)
+    ti_le_hog = pca_hog.explained_variance_ratio_
+    tich_luy_hog = np.cumsum(ti_le_hog)
+    k = int(np.searchsorted(tich_luy_hog, GIU_PHUONG_SAI) + 1)      # k nhỏ nhất đạt 95%
     k = min(k, int(len(X_train) * (1 - 1 / SO_FOLD)) - 1)            # không vượt số ảnh của 1 fold
     print(f"  {X_train.shape[1]} chiều -> cần k = {k} thành phần chính "
           f"để giữ {GIU_PHUONG_SAI:.0%} phương sai")
 
     # (a) Biểu đồ kết hợp: phương sai từng thành phần (cột) + tích lũy (đường)
-    m = min(len(ti_le), max(60, k + 10))
+  m = min(len(ti_le_hog), max(60, k + 10))
     fig, ax1 = plt.subplots(figsize=(10, 4.2))
-    so_cot = min(50, len(ti_le))                                     # cột: 50 thành phần đầu
-    ax1.bar(np.arange(1, so_cot + 1), ti_le[:so_cot] * 100, color="steelblue")
+    so_cot = min(50, len(ti_le_hog))
+    ax1.bar(np.arange(1, so_cot + 1), ti_le_hog[:so_cot] * 100, color="steelblue")
     ax1.set(xlabel="Thành phần chính (PC)", ylabel="Phương sai từng thành phần (%)")
     ax2 = ax1.twinx()
-    ax2.plot(np.arange(1, m + 1), tich_luy[:m] * 100, color="red", marker=".")
+    ax2.plot(np.arange(1, m + 1), tich_luy_hog[:m] * 100, color="red", marker=".")
     ax2.axhline(GIU_PHUONG_SAI * 100, color="gray", ls="--")
     ax2.axvline(k, color="gray", ls=":")
     ax2.set(ylabel="Phương sai tích lũy (%)", ylim=(0, 102))
-    plt.title(f"PCA: {k} thành phần đầu giữ {tich_luy[k - 1] * 100:.1f}% phương sai")
+    plt.title(f"PCA trên HOG: {k} thành phần đầu giữ {tich_luy_hog[k - 1] * 100:.1f}% phương sai")
     C.luu_hinh("3_pca_phuong_sai.png")
 
     # (b) Mặt trung bình + 15 eigenfaces (mỗi vector riêng 10.000 phần tử vẽ thành 1 ảnh)
@@ -67,20 +73,20 @@ def phan_tich_pca(X_train, y_train):
     C.luu_hinh("3_eigenfaces.png")
 
     # (c) Trước / sau PCA (giống code slide PCA): 2 pixel gốc vs 2 thành phần chính đầu
-    Z = pca.transform(Xs)
-    so = pd.factorize(y_train)[0]                                   # tên người -> mã số 0, 1, 2…
-    p1, p2 = 46 * C.KICH_THUOC + 34, 46 * C.KICH_THUOC + 66          # 2 pixel ở vùng mắt
+    Z = pca.transform(Xs))
+    Z_hog = pca_hog.transform(Xs_hog)
+    so = pd.factorize(y_train)[0]                        # tên người -> mã số 0, 1, 2...
     plt.figure(figsize=(12, 5))
     plt.subplot(1, 2, 1)
-    plt.scatter(Xs[:, p1], Xs[:, p2], c=so, cmap="tab20", edgecolor="k", s=15)
-    plt.xlabel("Pixel mắt trái")
-    plt.ylabel("Pixel mắt phải")
-    plt.title("Trước PCA: 2 pixel gốc (đã chuẩn hóa)")
+    plt.scatter(Xs_hog[:, 0], Xs_hog[:, 1], c=so, cmap="tab20", edgecolor="k", s=15)
+    plt.xlabel("Đặc trưng HOG 1")
+    plt.ylabel("Đặc trưng HOG 2")
+    plt.title("Trước PCA: 2 đặc trưng HOG đầu (đã chuẩn hóa)")
     plt.subplot(1, 2, 2)
-    plt.scatter(Z[:, 0], Z[:, 1], c=so, cmap="tab20", edgecolor="k", s=15)
+    plt.scatter(Z_hog[:, 0], Z_hog[:, 1], c=so, cmap="tab20", edgecolor="k", s=15)
     plt.xlabel("Principal Component 1")
     plt.ylabel("Principal Component 2")
-    plt.title("Sau PCA: chiếu lên PC1, PC2")
+    plt.title("Sau PCA: chiếu lên PC1, PC2 (từ HOG)")
     plt.colorbar(label="Người (mã số)")
     C.luu_hinh("3_truoc_sau_pca.png")
 
@@ -106,6 +112,7 @@ def huan_luyen(X_train, y_train, k):
     bat_dau = time.perf_counter()
     with tempfile.TemporaryDirectory(prefix="cache_pca_") as bo_nho:
         pipeline = Pipeline([
+        ("hog", FunctionTransformer(C.trich_hog)),
             ("chuan_hoa", StandardScaler()),
             ("pca", PCA(n_components=k, random_state=C.RANDOM_STATE)),
             ("model", LogisticRegression(max_iter=5000, class_weight="balanced")),
