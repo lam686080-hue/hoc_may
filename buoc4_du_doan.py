@@ -11,8 +11,8 @@
             ket_qua/4_du_doan_tap_test.csv tên thật + tên dự đoán cho từng ảnh
             ket_qua/4_*.png                ảnh test kèm dự đoán, biểu đồ xác suất
  Các bước : 4.1 Nạp mô hình và tập test
-            4.2 Hồi quy logistic dự đoán tập test (predict) + đo thời gian
-            4.3 Hồi quy logistic: xác suất từng người (predict_proba), cả cho người lạ
+            4.2 Hồi quy logistic dự đoán tập test (predict_proba) + đo thời gian (batch và đơn lẻ)
+            4.3 Hồi quy logistic: thống kê xác suất cao nhất (predict_proba)
             4.4 Lưu kết quả dự đoán
             4.5 Vẽ ảnh test kèm dự đoán + biểu đồ xác suất (như ví dụ AR Face)
  Chạy     : python buoc4_du_doan.py
@@ -85,11 +85,12 @@ def main():
           f"người lạ: {int(la.sum())} ảnh")
 
     print("\n4.2 Hồi quy logistic dự đoán tập test")
-    lop = np.array(mh.classes_)
+    lop = np.array(mh.classes_)                              # thứ tự người ứng với các cột xác suất
     bat_dau = time.perf_counter()
-    P_test = mh.predict_proba(X_test)
-    du_doan = lop[np.argmax(P_test, axis=1)]
+    P_test = mh.predict_proba(X_test)                        # xác suất thuộc từng người (tổng = 1)
+    du_doan = lop[np.argmax(P_test, axis=1)]                 # chọn người có xác suất cao nhất
     ms = (time.perf_counter() - bat_dau) * 1000 / len(X_test)
+    # Đo thêm tốc độ dự đoán từng ảnh đơn lẻ (giống thực tế khi chạy camera ở bước 6)
     so_mau = min(50, len(X_test))
     bat_dau_don = time.perf_counter()
     for i in range(so_mau):

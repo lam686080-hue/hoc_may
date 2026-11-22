@@ -7,7 +7,8 @@
             Mô hình chỉ được nhìn tập train; tập test để đánh giá khách quan ở bước 5.
  Cách chia:
    - Ảnh tự thu có một lượt. Với ảnh người quen, chia theo từng người và từng nguồn
-     (ảnh tự thu), khoảng 75% train / 25% test. Nhóm có từ hai ảnh lấy ít nhất một
+     (ảnh tự thu), khoảng 75% train / 25% test (chia phân tầng stratify theo tư thế
+     để cả tập train và test đều có đủ các góc mặt). Nhóm có từ hai ảnh lấy ít nhất một
      ảnh test. Nhóm chỉ có một ảnh dùng ảnh đó để train.
    - Người lạ: chỉ để test (mô hình chưa từng thấy) -> bước 5 chọn ngưỡng người lạ.
  Đầu vào  : dataset/danh_sach.csv (bước 1)
@@ -30,7 +31,7 @@ TI_LE_TEST = 0.25          # mặc định: 25% mỗi người làm test
 
 # ======================= 2.2 CHIA DỮ LIỆU =======================
 def chia(df):
-    """Chia ảnh người quen theo (nguon, ten); người lạ gán tap = 'nguoi_la'."""
+    """Chia ảnh người quen theo (nguon, ten), phân tầng theo tư thế (tu_the); người lạ gán tap = 'nguoi_la'."""
     df = df.copy()
     df["tap"] = ""
     df.loc[df["vai_tro"] == "nguoi_la", "tap"] = "nguoi_la"
@@ -41,6 +42,7 @@ def chia(df):
             continue
         so_test = max(1, round(TI_LE_TEST * len(nhom)))
         strat = None
+        # Nếu ảnh tự thu có đủ mỗi tư thế >= 2 ảnh thì chia phân tầng (stratify) theo tư thế
         if nguon == "tu_thu" and "tu_the" in nhom.columns:
             dem = nhom["tu_the"].value_counts()
             if dem.min() >= 2 and so_test >= len(dem):

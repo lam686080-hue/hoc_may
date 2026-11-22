@@ -3,16 +3,18 @@
  BƯỚC 1 – CHUẨN BỊ DỮ LIỆU
  Phụ trách: Thành viên 1 – Bùi Trung Hiếu
 =====================================================================
- Làm gì   : Đọc ảnh mặt tự thu, đưa về CÙNG một dạng (căn chỉnh 5 điểm, xám 100x100,
-            lọc Gaussian + CLAHE), thống kê + vẽ biểu đồ, lưu lại cho các bước sau.
- Đầu vào  : dataset/mat_xam_100/<Tên>/*.png    ảnh nhóm tự thu bằng thu_anh.py (đã căn chỉnh)
- Đầu ra   : dataset/du_lieu_anh.npz   tất cả ảnh đã tiền xử lý (N x 100 x 100)
-            dataset/danh_sach.csv     mỗi dòng 1 ảnh: file, tên, nguồn, lượt, tư thế, vai trò
+ Làm gì   : Đọc ảnh mặt tự thu và ảnh người lạ, đưa về CÙNG một dạng (căn chỉnh 5 điểm,
+            xám 100x100, lọc Gaussian + CLAHE), thống kê + vẽ biểu đồ, lưu lại cho các bước sau.
+ Đầu vào  : dataset/mat_xam_100/<Tên>/*.png        ảnh nhóm tự thu bằng thu_anh.py (đã căn chỉnh)
+            dataset/nguoi_la_chon_nguong/*         ảnh người lạ dùng để chọn ngưỡng ở bước 5
+            dataset/nguoi_la/*                     ảnh người lạ dùng để kiểm tra độc lập ở bước 5
+ Đầu ra   : dataset/du_lieu_anh.npz   tất cả ảnh người quen + người lạ đã tiền xử lý (N x 100 x 100)
+            dataset/danh_sach.csv     mỗi dòng 1 ảnh người quen: file, tên, nguồn, lượt, tư thế, vai trò
             ket_qua/1_*.png           biểu đồ cho báo cáo
  Các bước : 1.1 Đọc ảnh tự thu của người quen
             1.2 Tiền xử lý: lọc Gaussian + cân bằng sáng CLAHE
             1.3 Thống kê và trực quan hóa
-            1.4 Lưu dữ liệu
+            1.4 Chuẩn bị ảnh người lạ và lưu dữ liệu
  Chạy     : python buoc1_chuan_bi_du_lieu.py
 =====================================================================
 """
@@ -122,8 +124,9 @@ def thong_ke_va_ve(df, anh):
     print(do_sang.groupby(df["nguon"]).agg(["count", "mean", "median", "std"]).round(1).to_string())
 
 
-# =====================================================================
+# ======================= 1.4 CHUẨN BỊ ẢNH NGƯỜI LẠ & LƯU =======================
 def doc_mat(path, detector):
+    """Đọc 1 ảnh bất kỳ -> MediaPipe tìm đúng 1 mặt -> căn chỉnh 5 điểm + tiền xử lý."""
     try:
         anh = T.doc_anh(str(path))
     except (cv2.error, OSError):
@@ -147,6 +150,7 @@ def doc_mat(path, detector):
 
 
 def chuan_bi_nguoi_la():
+    """Đọc và tiền xử lý 2 bộ ảnh người lạ (nguoi_la_chon_nguong và nguoi_la) để bước 5 dùng."""
     data = {}
     for nhom in ("nguoi_la_chon_nguong", "nguoi_la"):
         folder = Path(C.DATASET) / nhom

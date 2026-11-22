@@ -3,19 +3,20 @@
  BƯỚC 6 – TRIỂN KHAI: NHẬN DIỆN THỜI GIAN THỰC + ĐIỂM DANH
  Phụ trách: Thành viên 3 – Lê Thanh Cao
 =====================================================================
- Làm gì   : Camera -> tìm các khuôn mặt ->căn chỉnh + tiền xử lý GIỐNG HỆT
-            bước 1 -> hồi quy logistic (bước 5) cho xác suất -> hiện tên / "Nguoi la"
-            -> nhận ổn định 1,5 giây thì ghi điểm danh. Chạy trên Jetson, xem qua web.
+ Làm gì   : Camera -> tìm các khuôn mặt -> căn chỉnh + tiền xử lý GIỐNG HỆT
+            bước 1 -> hồi quy logistic (HOG + PCA, bước 5) cho xác suất -> hiện tên / "Nguoi la"
+            -> nhận ổn định 1,5 giây thì ghi điểm danh. Chạy trên laptop hoặc Jetson, xem qua web.
  Đầu vào  : mo_hinh/mo_hinh_tot_nhat.joblib (bước 5), camera đã chọn trong thu_anh.py
- Đầu ra   : hình nhận diện (cửa sổ hoặc web), file diem_danh.csv
+ Đầu ra   : hình nhận diện (cửa sổ, web MJPEG hoặc gửi sang Flask server), file diem_danh.csv
  Các bước : 6.1 Nạp mô hình
             6.2 Kết nối camera (luồng đọc riêng, tự kết nối lại khi mất tín hiệu)
             6.3 MediaPipe tìm tối đa 4 khuôn mặt trong mỗi khung hình
-            6.4 Mỗi khuôn mặt: căn chỉnh 5 điểm -> tiền xử lý -> predict_proba
+            6.4 Mỗi khuôn mặt: căn chỉnh 5 điểm -> tiền xử lý -> HOG + PCA -> predict_proba
             6.5 Quyết định tên (ngưỡng người lạ, làm mượt), điểm danh
-            6.6 Vẽ kết quả, hiển thị ra cửa sổ hoặc trang web
- Chạy     : python buoc6_nhan_dien.py          (laptop, hiện cửa sổ – bấm q để thoát)
-            python3 buoc6_nhan_dien.py --web   (xem qua cổng 5000 khi chạy trực tiếp trên Orin)
+            6.6 Vẽ kết quả, hiển thị ra cửa sổ, trang web hoặc gửi tới Flask server
+ Chạy     : python buoc6_nhan_dien.py                      (laptop, hiện cửa sổ – bấm q để thoát)
+            python3 buoc6_nhan_dien.py --web               (xem qua cổng 5000 khi chạy trực tiếp trên Orin)
+            python3 buoc6_nhan_dien.py --server <URL>      (gửi khung hình + JSON sang Flask server)
  Cần cùng thư mục: chung.py, thu_anh.py (hàm camera + căn chỉnh mặt), face_landmarker.task
 =====================================================================
 """
@@ -41,7 +42,7 @@ from mediapipe.tasks.python import vision
 import thu_anh as T          # dùng lại: camera, xoay hình, góc đầu, căn chỉnh mặt 5 điểm
 
 # ============================ CẤU HÌNH ============================
-NGUONG_NGUOI_LA = 0.60             # None = dùng ngưỡng bước 5 đã chọn; hoặc đặt tay, vd 0.5
+NGUONG_NGUOI_LA = None             # None = dùng ngưỡng bước 5 đã chọn; hoặc đặt tay, vd 0.5
 SO_MAT_TOI_DA = 4                  # nhận diện tối đa 4 người cùng lúc
 LAM_MUOT = 0.75                    # làm mượt xác suất qua các khung hình (0 = không làm mượt)
 GIU_MAT = 0.7                      # mất dấu mặt < 0,7 giây vẫn giữ khung + tên (chống nhấp nháy)
@@ -76,7 +77,8 @@ class NhanDien:
     # ---------------------- 6.4 DỰ ĐOÁN 1 KHUÔN MẶT ----------------------
     def du_doan(self, raw, d5):
         """Căn chỉnh 5 điểm -> ảnh xám 100x100 -> C.tien_xu_ly (GIỐNG HỆT bước 1)
-        -> vector 10.000 chiều -> predict_proba: xác suất thuộc từng người."""
+        -> vector 10.000 chiều -> pipeline (HOG -> StandardScaler -> PCA -> LogisticRegression)
+        trả về predict_proba: xác suất thuộc từng người."""
         return self.mo_hinh.predict_proba(C.vector_hoa(C.mat_xam_chuan(raw, d5)[None]))[0]
 
     # ---------------------- 6.5 QUYẾT ĐỊNH TÊN + ĐIỂM DANH ----------------------
@@ -214,8 +216,9 @@ def hien_thi(anh, che_do_web):
     cv2.imshow(TEN_CUA_SO, anh)
     return (cv2.waitKey(1) & 0xFF) in (ord("q"), 27)
 
+
 class GuiServer:
-    """Gửi khung hình JPEG và kết quả JSON sang Flask server (nhom11nhandienkhuonmat/server.py)."""
+    """Gửi khung hình JPEG và kết quả JSON sang Flask server (giao_dien_web/server.py)."""
     def __init__(self, url):
         self.url = url.rstrip("/")
         self._khoa = threading.Lock()
@@ -263,9 +266,31 @@ class GuiServer:
                 except Exception:
                     pass
             time.sleep(0.08)
-    
+
     def dong(self):
         self._chay = False
+
+
+def tao_bo_tim_mat():
+    """Khởi tạo bộ tìm khuôn mặt MediaPipe Face Landmarker ở chế độ VIDEO (dùng chung cho cả server.py)."""
+    return vision.FaceLandmarker.create_from_options(vision.FaceLandmarkerOptions(
+            base_options=mp_python.BaseOptions(model_asset_buffer=T.tai_model()),
+            running_mode=vision.RunningMode.VIDEO, num_faces=SO_MAT_TOI_DA,
+            min_face_detection_confidence=0.6, min_face_presence_confidence=0.6,
+            min_tracking_confidence=0.6))
+
+
+def xu_ly_khung(frame, xoay, nd, lm, ts, fps):
+    """Chuẩn bị khung hình -> MediaPipe tìm mặt -> nhận diện + điểm danh -> vẽ kết quả."""
+    raw = T.chuan_bi_khung(frame, xoay)
+    h, w = raw.shape[:2]
+    scale = min(1.0, T.XU_LY_CAO / h)
+    small = cv2.resize(raw, (max(1, int(w * scale)), max(1, int(h * scale))))
+    rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+    result = lm.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
+    faces = nd.xu_ly(raw, result)
+    return nd.ve(raw, faces, fps), faces
+
 
 def main():
     che_do_web = "--web" in sys.argv
@@ -306,11 +331,7 @@ def main():
             print(f"Web: http://<IP máy này>:{CONG_WEB}")
 
         print("6.3 Tạo bộ tìm khuôn mặt MediaPipe (chế độ video)")
-        lm = tai_nguyen.enter_context(vision.FaceLandmarker.create_from_options(vision.FaceLandmarkerOptions(
-            base_options=mp_python.BaseOptions(model_asset_buffer=T.tai_model()),
-            running_mode=vision.RunningMode.VIDEO, num_faces=SO_MAT_TOI_DA,
-            min_face_detection_confidence=0.6, min_face_presence_confidence=0.6,
-            min_tracking_confidence=0.6)))
+        lm = tai_nguyen.enter_context(tao_bo_tim_mat())
         id_cu, t0, ts, fps, hien, t_moi, so_loi = -1, time.perf_counter(), 0, 0.0, None, time.time(), 0
         print("Đang nhận diện... " + ("Ctrl+C để dừng." if che_do_web else "Bấm q ở cửa sổ để dừng."))
         try:
@@ -332,14 +353,8 @@ def main():
                 fps = 0.9 * fps + 0.1 / max(bay_gio - t_moi, 1e-3)       # số khung/giây (làm mượt)
                 t_moi = bay_gio
                 try:                                    # 1 khung hình lỗi không làm chương trình tắt
-                    raw = T.chuan_bi_khung(frame, xoay)
-                    H, W = raw.shape[:2]
-                    s = min(1.0, T.XU_LY_CAO / H)       # thu nhỏ (cao 480 px) cho MediaPipe chạy nhanh
-                    rgb = cv2.cvtColor(cv2.resize(raw, (int(W * s), int(H * s))), cv2.COLOR_BGR2RGB)
-                    ts = max(int((time.perf_counter() - t0) * 1000), ts + 1)   # thời điểm (ms) tăng
-                    kq = lm.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
-                    cac_mat = nd.xu_ly(raw, kq)
-                    hien = nd.ve(raw, cac_mat, fps)                 # 6.4 -> 6.6
+                    ts = max(int((time.perf_counter() - t0) * 1000), ts + 1)
+                    hien, cac_mat = xu_ly_khung(frame, xoay, nd, lm, ts, fps)
                     if gui is not None:
                        gui.cap_nhat(hien, cac_mat)
                 except Exception as e:

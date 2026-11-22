@@ -1,3 +1,4 @@
+import argparse
 import os
 import cv2
 import gc
@@ -7,7 +8,7 @@ import threading
 import time
 
 ORIN_IP = "100.69.60.112"
-URL = f"http://{ORIN_IP}:5000/upload_frame"
+
 
 # Neu camera khong nha khi tat, thu doi sang cv2.CAP_DSHOW
 BACKEND = cv2.CAP_MSMF
@@ -82,11 +83,12 @@ def capture_loop():
 
 
 # ---------- Gui frame ----------
-def sender_loop():
+def sender_loop(url):
     session = requests.Session()
     interval = 1.0 / FPS_SEND
     next_t = time.perf_counter()
     last_err_print = 0.0
+    last_sent = None
 
     while not stop_event.is_set():
         now = time.perf_counter()
@@ -97,16 +99,17 @@ def sender_loop():
 
         with lock:
             frame = latest_frame
-        if frame is None:
+        if frame is None or frame is last_sent or not cam_enabled.is_set():
             continue
 
+        last_sent = frame
         ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
         if not ok:
             continue
 
         try:
             r = session.post(
-                URL,
+                url,
                 data=buf.tobytes(),
                 headers={"Content-Type": "image/jpeg"},
                 timeout=(1, 2),
@@ -133,10 +136,15 @@ def make_off_screen():
 
 # ---------- Main ----------
 def main():
+    parser = argparse.ArgumentParser(description="Gửi webcam Windows tới Orin.")
+    parser.add_argument("--orin-ip", default=ORIN_IP, help="Địa chỉ IP của Orin")
+    args = parser.parse_args()
+    url = f"http://{args.orin_ip}:5000/upload_frame"
+    print(f"Gửi hình tới {url}")
     off_screen = make_off_screen()
 
     t_cap = threading.Thread(target=capture_loop, daemon=True)
-    t_send = threading.Thread(target=sender_loop, daemon=True)
+    t_send = threading.Thread(target=sender_loop, args=(url,), daemon=True)
     t_cap.start()
     t_send.start()
 

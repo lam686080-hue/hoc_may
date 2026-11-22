@@ -15,7 +15,7 @@
             5.3 Ma trận nhầm lẫn
             5.4 Đường ROC và AUC
             5.5 Phân tích lỗi: theo nguồn ảnh, theo tư thế, từng người, ảnh nhận sai
-            5.6 Người lạ: chọn ngưỡng để FAR và FRR gần nhau nhất trên bộ ảnh dùng chọn ngưỡng
+            5.6 Người lạ: chọn ngưỡng cân bằng FAR/FRR trên tập hiệu chỉnh, rồi kiểm tra độc lập
             5.7 Lưu mô hình bước 3 với ngưỡng đã chọn cho bước 6
             5.8 Tạo trang xem kết quả
  Chạy     : python buoc5_danh_gia.py
@@ -150,6 +150,8 @@ def phan_tich_loi(X_test, y_test, y_doan, tu_the, nguon, ten_mo_hinh):
 
 # ======================= 5.6 NGƯỠNG NGƯỜI LẠ =======================
 def kiem_tra_nguoi_la(data, mh, nguong):
+    """Đánh giá độc lập khả năng từ chối người lạ trên bộ ảnh dataset/nguoi_la
+    (không tham gia vào bước chọn ngưỡng), lưu chi tiết ra ket_qua/test_nguoi_la.csv."""
     names = data["nguoi_la_file"]
     status = data["nguoi_la_status"]
     faces = data["nguoi_la"]

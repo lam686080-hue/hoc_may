@@ -1,11 +1,14 @@
 """
 =====================================================================
  BƯỚC 3 – HUẤN LUYỆN MÔ HÌNH
- Phụ trách: 3.1 – 3.2 (PCA)         Thành viên 1 – Bùi Trung Hiếu
+ Phụ trách: 3.1 – 3.2 (HOG + PCA)          Thành viên 1 – Bùi Trung Hiếu
             3.3 – 3.5 (hồi quy logistic)   Thành viên 2 – Nguyễn Văn Lâm
 =====================================================================
- Dùng PCA để giảm chiều và chọn tham số C của hồi quy logistic trên tập học.
- Đầu ra: mô hình đã học và kết quả kiểm tra chéo.
+ Trích đặc trưng HOG (2.916 chiều), chuẩn hóa StandardScaler, dùng PCA để giảm chiều
+ (giữ 95% phương sai) và chọn tham số C của hồi quy logistic bằng kiểm tra chéo 5-fold
+ (tối ưu theo log_loss để xác suất predict_proba phản ánh đúng độ tự tin).
+ Đầu ra: mô hình đã học (mo_hinh/hoi_quy_logistic.joblib) và kết quả CV (ket_qua/3_ket_qua_cv.csv).
+=====================================================================
 """
 import os
 import time
@@ -28,27 +31,30 @@ SO_FOLD = 5                # cross-validation 5-fold
 
 # ============ 3.2 PHÂN TÍCH PCA  (Thành viên 1 – Bùi Trung Hiếu) ============
 def phan_tich_pca(X_train, y_train):
-    """Làm PCA đầy đủ trên tập train để chọn k và vẽ hình minh họa."""
+    """Phân tích PCA trên đặc trưng HOG để chọn số thành phần chính k (giữ 95% phương sai)
+    và kết hợp PCA trên ảnh pixel gốc để vẽ Eigenfaces + khôi phục ảnh minh họa."""
+    # PCA trên pixel gốc (10.000 chiều): dùng để vẽ mặt trung bình, Eigenfaces và khôi phục ảnh
     scaler = StandardScaler().fit(X_train)          # fit: tính mean, std từng pixel (tập train)
     Xs = scaler.transform(X_train)                  # transform: z = (x - mean) / std
     pca = PCA(svd_solver="full").fit(Xs)            # tính TẤT CẢ thành phần chính (vector riêng)
     ti_le = pca.explained_variance_ratio_           # tỉ lệ phương sai của từng thành phần
-    tich_luy = np.cumsum(ti_le)
-    X_hog = C.trich_hog(X_train)
-    scaler_hog = StandardScaler().fit(X_hog)
+
+    # PCA trên đặc trưng HOG (2.916 chiều): dùng trong pipeline huấn luyện thực tế
+    X_hog = C.trich_hog(X_train)                    # trích đặc trưng HOG cho từng ảnh train
+    scaler_hog = StandardScaler().fit(X_hog)        # chuẩn hóa đặc trưng HOG
     Xs_hog = scaler_hog.transform(X_hog)
     pca_hog = PCA(svd_solver="full", random_state=C.RANDOM_STATE).fit(Xs_hog)
-    ti_le_hog = pca_hog.explained_variance_ratio_
+    ti_le_hog = pca_hog.explained_variance_ratio_   # tỉ lệ phương sai từng thành phần trên HOG
     tich_luy_hog = np.cumsum(ti_le_hog)
-    k = int(np.searchsorted(tich_luy_hog, GIU_PHUONG_SAI) + 1)      # k nhỏ nhất đạt 95%
+    k = int(np.searchsorted(tich_luy_hog, GIU_PHUONG_SAI) + 1)      # k nhỏ nhất đạt 95% phương sai HOG
     k = min(k, int(len(X_train) * (1 - 1 / SO_FOLD)) - 1)            # không vượt số ảnh của 1 fold
-    print(f"  {X_train.shape[1]} chiều -> cần k = {k} thành phần chính "
+    print(f"  Ảnh {X_train.shape[1]} pixel -> HOG {X_hog.shape[1]} chiều -> cần k = {k} thành phần chính "
           f"để giữ {GIU_PHUONG_SAI:.0%} phương sai")
 
-    # (a) Biểu đồ kết hợp: phương sai từng thành phần (cột) + tích lũy (đường)
+    # (a) Biểu đồ kết hợp: phương sai từng thành phần (cột) + tích lũy (đường) của PCA trên HOG
     m = min(len(ti_le_hog), max(60, k + 10))
     fig, ax1 = plt.subplots(figsize=(10, 4.2))
-    so_cot = min(50, len(ti_le_hog))
+    so_cot = min(50, len(ti_le_hog))                                 # cột: 50 thành phần đầu
     ax1.bar(np.arange(1, so_cot + 1), ti_le_hog[:so_cot] * 100, color="steelblue")
     ax1.set(xlabel="Thành phần chính (PC)", ylabel="Phương sai từng thành phần (%)")
     ax2 = ax1.twinx()
@@ -72,7 +78,7 @@ def phan_tich_pca(X_train, y_train):
     plt.suptitle("Eigenfaces: các vector riêng của tập khuôn mặt")
     C.luu_hinh("3_eigenfaces.png")
 
-    # (c) Trước / sau PCA (giống code slide PCA): 2 pixel gốc vs 2 thành phần chính đầu
+    # (c) Trước / sau PCA trên HOG: 2 đặc trưng HOG đầu vs 2 thành phần chính đầu (PC1, PC2)
     Z = pca.transform(Xs)
     Z_hog = pca_hog.transform(Xs_hog)
     so = pd.factorize(y_train)[0]                        # tên người -> mã số 0, 1, 2...
@@ -90,7 +96,7 @@ def phan_tich_pca(X_train, y_train):
     plt.colorbar(label="Người (mã số)")
     C.luu_hinh("3_truoc_sau_pca.png")
 
-    # (d) Khôi phục ảnh từ m thành phần: x ≈ mean + z_1*PC1 + ... + z_m*PCm
+    # (d) Khôi phục ảnh từ m thành phần (PCA pixel): x ≈ mean + z_1*PC1 + ... + z_m*PCm
     cac_m = sorted({min(10, k), min(50, k), k})                    # vd 10, 50, k thành phần
     fig, ax = plt.subplots(4, len(cac_m) + 1, figsize=(2 * (len(cac_m) + 1), 8.2))
     for r in range(4):
@@ -107,18 +113,21 @@ def phan_tich_pca(X_train, y_train):
 
 
 def huan_luyen(X_train, y_train, k):
-    """Chọn mức điều chuẩn C cho hồi quy logistic bằng kiểm tra chéo."""
+    """Huấn luyện Pipeline (HOG -> StandardScaler -> PCA -> LogisticRegression)
+    và chọn mức điều chuẩn C bằng kiểm tra chéo 5-fold (chọn mô hình có log_loss nhỏ nhất)."""
     cv = StratifiedKFold(SO_FOLD, shuffle=True, random_state=C.RANDOM_STATE)
     bat_dau = time.perf_counter()
     with tempfile.TemporaryDirectory(prefix="cache_pca_") as bo_nho:
         pipeline = Pipeline([
-                ("hog", FunctionTransformer(C.trich_hog)),
-              ("chuan_hoa", StandardScaler()),
-              ("pca", PCA(n_components=k, random_state=C.RANDOM_STATE)),
-              ("model", LogisticRegression(max_iter=5000, class_weight="balanced")),
-            ], memory=bo_nho)
+            ("hog", FunctionTransformer(C.trich_hog)),                      # trích đặc trưng HOG (2.916 chiều)
+            ("chuan_hoa", StandardScaler()),                                # chuẩn hóa z = (x - mean) / std
+            ("pca", PCA(n_components=k, random_state=C.RANDOM_STATE)),      # giảm chiều về k thành phần chính
+            ("model", LogisticRegression(max_iter=5000, class_weight="balanced")),
+        ], memory=bo_nho)
+        # Chấm cả accuracy và neg_log_loss; chọn C tốt nhất theo neg_log_loss để xác suất mượt và chuẩn hơn
         tim = GridSearchCV(pipeline, {"model__C": [0.001, 0.01, 0.1, 1]},
-                           cv=cv, scoring={"accuracy": "accuracy", "neg_log_loss": "neg_log_loss"}, refit="neg_log_loss", n_jobs=1)
+                           cv=cv, scoring={"accuracy": "accuracy", "neg_log_loss": "neg_log_loss"},
+                           refit="neg_log_loss", n_jobs=1)
         tim.fit(X_train, y_train)
         mh = tim.best_estimator_.set_params(memory=None)
         idx = tim.best_index_

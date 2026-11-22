@@ -73,6 +73,7 @@ def tien_xu_ly(anh_xam):
 
 
 def mat_xam_chuan(anh, d5):
+    """Căn chỉnh mặt theo 5 điểm mốc -> chuyển ảnh xám 100x100 -> tiền xử lý (Gaussian + CLAHE)."""
     from thu_anh import can_chinh_mat
     mat = can_chinh_mat(anh, d5, KICH_THUOC)
     return tien_xu_ly(cv2.cvtColor(mat, cv2.COLOR_BGR2GRAY))
@@ -83,11 +84,13 @@ def vector_hoa(cac_anh):
     (giống hàm vectorize_img trong ví dụ AR Face của bài giảng)."""
     return cac_anh.reshape(len(cac_anh), -1).astype(np.float32)
 
+
+# Bộ trích đặc trưng HOG: ảnh 100x100, block 20x20, bước trượt 10x10, cell 10x10, 9 hướng -> 2.916 chiều
 _hog = cv2.HOGDescriptor((KICH_THUOC, KICH_THUOC), (20, 20), (10, 10), (10, 10), 9)
 
 
 def trich_hog(X):
-    """Trích đặc trưng HOG từ ma trận ảnh phẳng (N, 10000)."""
+    """Trích đặc trưng HOG từ ma trận ảnh phẳng (N, 10000) -> ma trận (N, 2916)."""
     X = np.asarray(X)
     if X.ndim == 1:
         X = X[None, :]
