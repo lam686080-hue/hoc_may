@@ -338,10 +338,10 @@ def main():
                     rgb = cv2.cvtColor(cv2.resize(raw, (int(W * s), int(H * s))), cv2.COLOR_BGR2RGB)
                     ts = max(int((time.perf_counter() - t0) * 1000), ts + 1)   # thời điểm (ms) tăng
                     kq = lm.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
-                cac_mat = nd.xu_ly(raw, kq)
-                hien = nd.ve(raw, cac_mat, fps)                 # 6.4 -> 6.6
-                if gui is not None:
-                    gui.cap_nhat(hien, cac_mat)
+                    cac_mat = nd.xu_ly(raw, kq)
+                    hien = nd.ve(raw, cac_mat, fps)                 # 6.4 -> 6.6
+                    if gui is not None:
+                       gui.cap_nhat(hien, cac_mat)
                 except Exception as e:
                     so_loi += 1
                     if so_loi <= 5:                     # chỉ in vài lỗi đầu cho đỡ rối màn hình
