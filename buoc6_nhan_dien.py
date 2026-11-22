@@ -3,7 +3,7 @@
  BƯỚC 6 – TRIỂN KHAI: NHẬN DIỆN THỜI GIAN THỰC + ĐIỂM DANH
  Phụ trách: Thành viên 3 – Lê Thanh Cao
 =====================================================================
- Làm gì   : Camera -> tìm các khuôn mặt -> căn chỉnh + tiền xử lý GIỐNG HỆT
+ Làm gì   : Camera -> tìm các khuôn mặt ->căn chỉnh + tiền xử lý GIỐNG HỆT
             bước 1 -> hồi quy logistic (bước 5) cho xác suất -> hiện tên / "Nguoi la"
             -> nhận ổn định 1,5 giây thì ghi điểm danh. Chạy trên Jetson, xem qua web.
  Đầu vào  : mo_hinh/mo_hinh_tot_nhat.joblib (bước 5), camera đã chọn trong thu_anh.py
