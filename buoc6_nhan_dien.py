@@ -216,9 +216,8 @@ def hien_thi(anh, che_do_web):
 
 class GuiServer:
     """Gửi khung hình JPEG và kết quả JSON sang Flask server (nhom11nhandienkhuonmat/server.py)."""
-    def __init__(self, url), gui_anh=True:
+    def __init__(self, url):
         self.url = url.rstrip("/")
-        self.gui_anh = gui_anh
         self._khoa = threading.Lock()
         self._jpg = None
         self._data = None
@@ -226,13 +225,9 @@ class GuiServer:
         threading.Thread(target=self._vong_gui, daemon=True).start()
 
     def cap_nhat(self, anh, cac_mat):
-        if self.gui_anh:
-            ok, buf = cv2.imencode(".jpg", anh, [cv2.IMWRITE_JPEG_QUALITY, 80])
-            if not ok:
-                return
-              jpg = buf.tobytes()
-        else:
-            jpg = None
+        ok, buf = cv2.imencode(".jpg", anh, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        if not ok:
+            return
         if cac_mat:
             m = max(cac_mat, key=lambda x: float(x["xs"].max()) if x.get("xs") is not None else 0.0)
             ten = m.get("ten", "Nguoi la")
@@ -241,7 +236,7 @@ class GuiServer:
             ten, conf = "Khong co khuon mat", 0.0
         payload = {"name": ten, "confidence": conf, "count": len(cac_mat)}
         with self._khoa:
-            self._jpg = jpg
+            self._jpg = buf.tobytes()
             self._data = json.dumps(payload).encode("utf-8")
 
     def _vong_gui(self):
@@ -275,19 +270,15 @@ class GuiServer:
 def main():
     che_do_web = "--web" in sys.argv
     url_server = sys.argv[sys.argv.index("--server") + 1] if "--server" in sys.argv and sys.argv.index("--server") + 1 < len(sys.argv) else None
-    url_tu_web = sys.argv[sys.argv.index("--tu-web") + 1] if "--tu-web" in sys.argv and sys.argv.index("--tu-web") + 1 < len(sys.argv) else None
-    if url_tu_web is not None:
-        che_do_web = True
-    nguon_cam = f"{url_tu_web.rstrip('/')}/video" if url_tu_web is not None else T.CAMERA
     print("=" * 70)
     print(" BƯỚC 6 – NHẬN DIỆN THỜI GIAN THỰC" + (" (chế độ web)" if che_do_web else ""))
     print("=" * 70)
     print("6.1 Nạp mô hình")
     nd = NhanDien()
 
-    print(f"6.2 Kết nối camera {nguon_cam} ...")
+    print(f"6.2 Kết nối camera {T.CAMERA} ...")
     with ExitStack() as tai_nguyen:
-        cam = T.CameraLuong(nguon_cam)             # luồng đọc camera chạy nền, giữ khung mới nhất
+        cam = T.CameraLuong(T.CAMERA)             # luồng đọc camera chạy nền, giữ khung mới nhất
         tai_nguyen.callback(cam.dung)
         if not che_do_web:
             tai_nguyen.callback(cv2.destroyAllWindows)
@@ -304,11 +295,7 @@ def main():
             xoay = x if ok else xoay
         print(f"   Chiều camera: {T.TEN_XOAY.get(xoay, xoay)}")
         gui = None
-        if url_tu_web is not None:
-            gui = GuiServer(url_tu_web, gui_anh=False)
-            tai_nguyen.callback(gui.dong)
-            print(f"Đang đọc camera từ {nguon_cam} và gửi JSON về {url_tu_web.rstrip('/')}/receive")
-        elif url_server is not None:
+        if url_server is not None:
             gui = GuiServer(url_server)
             tai_nguyen.callback(gui.dong)
             print(f"Dang gui khung hinh + JSON sang: {url_server}")
