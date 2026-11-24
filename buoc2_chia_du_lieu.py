@@ -6,13 +6,13 @@
  Làm gì   : Quyết định ảnh nào dùng để HỌC (train), ảnh nào để KIỂM TRA (test).
             Mô hình chỉ được nhìn tập train; tập test để đánh giá khách quan ở bước 5.
  Cách chia:
-   - Ảnh tự thu có một lượt. Với ảnh người quen, chia theo từng người và từng nguồn
-     (ảnh tự thu), khoảng 75% train / 25% test (chia phân tầng stratify theo tư thế
-     để cả tập train và test đều có đủ các góc mặt). Nhóm có từ hai ảnh lấy ít nhất một
-     ảnh test. Nhóm chỉ có một ảnh dùng ảnh đó để train.
-   - Người lạ: chỉ để test (mô hình chưa từng thấy) -> bước 5 chọn ngưỡng người lạ.
+   - Chia ảnh người quen theo từng người, khoảng 75% train / 25% test (chia phân tầng
+     stratify theo tư thế để cả tập train và test đều có đủ các góc mặt).
+     Người có từ hai ảnh lấy ít nhất một ảnh test; người chỉ có một ảnh dùng để train.
+   - Ảnh người lạ đã được bước 1 lưu riêng trong dataset/du_lieu_anh.npz
+     (nguoi_la_chon_nguong và nguoi_la), không tham gia huấn luyện.
  Đầu vào  : dataset/danh_sach.csv (bước 1)
- Đầu ra   : dataset/danh_sach.csv thêm cột "tap" = train / test / nguoi_la
+ Đầu ra   : dataset/danh_sach.csv thêm cột "tap" = train / test
             ket_qua/2_chia_train_test.png
  Các bước : 2.1 Đọc danh sách ảnh
             2.2 Chia theo quy tắc trên (hàm chia)
@@ -31,70 +31,53 @@ TI_LE_TEST = 0.25          # mặc định: 25% mỗi người làm test
 
 # ======================= 2.2 CHIA DỮ LIỆU =======================
 def chia(df):
-    """Chia ảnh người quen theo (nguon, ten), phân tầng theo tư thế (tu_the); người lạ gán tap = 'nguoi_la'."""
-    df = df.copy()
-    df["tap"] = ""
-    df.loc[df["vai_tro"] == "nguoi_la", "tap"] = "nguoi_la"
-
-    for (nguon, ten), nhom in df[df["vai_tro"] == "biet"].groupby(["nguon", "ten"]):
+    """Chia ảnh người quen theo từng người, phân tầng theo tư thế (tu_the)."""
+    tap = pd.Series("", index=df.index)
+    for _, nhom in df.groupby("ten"):
         if len(nhom) == 1:
-            df.loc[nhom.index, "tap"] = "train"
+            tap.loc[nhom.index] = "train"
             continue
         so_test = max(1, round(TI_LE_TEST * len(nhom)))
-        strat = None
-        # Nếu ảnh tự thu có đủ mỗi tư thế >= 2 ảnh thì chia phân tầng (stratify) theo tư thế
-        if nguon == "tu_thu" and "tu_the" in nhom.columns:
-            dem = nhom["tu_the"].value_counts()
-            if dem.min() >= 2 and so_test >= len(dem):
-                strat = nhom["tu_the"]
-        idx_tr, idx_te = train_test_split(
-            nhom.index, test_size=so_test,
-            random_state=C.RANDOM_STATE, stratify=strat,
-        )
-        df.loc[idx_tr, "tap"] = "train"
-        df.loc[idx_te, "tap"] = "test"
-    return df["tap"]
+        dem = nhom["tu_the"].value_counts() if "tu_the" in nhom else pd.Series(dtype=int)
+        strat = nhom["tu_the"] if len(dem) and dem.min() >= 2 and so_test >= len(dem) else None
+        idx_tr, idx_te = train_test_split(nhom.index, test_size=so_test,
+                                          random_state=C.RANDOM_STATE, stratify=strat)
+        tap.loc[idx_tr], tap.loc[idx_te] = "train", "test"
+    return tap
+
 
 # =====================================================================
 def main():
-    print("=" * 70)
-    print(" BƯỚC 2 – CHIA DỮ LIỆU TRAIN / TEST")
-    print("=" * 70)
+    print("=" * 70 + "\n BƯỚC 2 – CHIA DỮ LIỆU TRAIN / TEST\n" + "=" * 70)
 
     print("\n2.1 Đọc danh sách ảnh")
-    _, df = C.doc_du_lieu()                                  # chỉ cần bảng thông tin ảnh
-    print(f"  {len(df)} ảnh")
+    _, df = C.doc_du_lieu()
+    print(f"  {len(df)} ảnh người quen")
 
     print("\n2.2 Chia dữ liệu")
     df["tap"] = chia(df)
-    # người quen không có ảnh train nào -> mô hình không học được -> coi là người lạ
-    khong_train = (set(df.loc[df["vai_tro"] == "biet", "ten"])
-                   - set(df.loc[df["tap"] == "train", "ten"]))
-    if khong_train:
-        df.loc[df["ten"].isin(khong_train), ["vai_tro", "tap"]] = "nguoi_la"
-        print("  ! Không có ảnh train -> chuyển thành người lạ: " + ", ".join(sorted(khong_train)))
 
     print("\n2.3 Kiểm tra")
     assert (df["tap"] != "").all(), "Có ảnh chưa được gán tập"
     assert not df["file"].duplicated().any(), "Có ảnh bị trùng (sẽ nằm ở 2 tập)"
-    assert not ((df["vai_tro"] == "nguoi_la") & (df["tap"] == "train")).any(), \
-        "Người lạ không được có ảnh train"
-    biet = df[df["vai_tro"] == "biet"]
-    bang = pd.crosstab(biet["ten"], biet["tap"]).reindex(columns=["train", "test"], fill_value=0)
+    assert set(df["ten"]) == set(df.loc[df["tap"] == "train", "ten"]), "Có người quen không có ảnh train"
+    bang = pd.crosstab(df["ten"], df["tap"]).reindex(columns=["train", "test"], fill_value=0)
     print(bang.to_string())
     dem = df["tap"].value_counts()
-    print("  Tổng:", dem.to_dict())
+    so_la_nguong, so_la_test = len(C.doc_nguoi_la("nguoi_la_chon_nguong")[0]), len(C.doc_nguoi_la("nguoi_la")[0])
+    print(f"  Tổng người quen: {dem.to_dict()} | người lạ riêng: {so_la_nguong} chọn ngưỡng, {so_la_test} kiểm tra")
 
     print("\n2.4 Biểu đồ xếp chồng: số ảnh train / test của mỗi người")
-    bang = bang.rename_axis(columns=None)                    # bỏ chữ "tap" ở chú thích
-    ax = bang.plot.bar(stacked=True, figsize=(max(8, 0.8 * len(bang)), 4.5),
-                       color=["steelblue", "darkorange"], edgecolor="black")
-    for cot in ax.containers:                                # ghi số ảnh lên giữa mỗi phần cột
+    ax = bang.rename_axis(columns=None).plot.bar(
+        stacked=True, figsize=(max(8, 0.8 * len(bang)), 4.5),
+        color=["steelblue", "darkorange"], edgecolor="black")
+    for cot in ax.containers:
         ax.bar_label(cot, labels=[f"{v:.0f}" if v else "" for v in cot.datavalues],
-                     label_type="center", fontsize=7)        # phần 0 ảnh: không ghi số
+                     label_type="center", fontsize=7)
     ax.set_xticklabels([C.rut_gon(t) for t in bang.index], rotation=30, ha="right")
-    ax.set(xlabel="", ylabel="Số ảnh", title=f"Chia dữ liệu: train {dem.get('train', 0)} | "
-           f"test {dem.get('test', 0)} | người lạ (chỉ test) {dem.get('nguoi_la', 0)}")
+    ax.set(xlabel="", ylabel="Số ảnh",
+           title=f"Chia dữ liệu: train {dem.get('train', 0)} | test {dem.get('test', 0)} | "
+                 f"người lạ riêng: {so_la_nguong} chọn ngưỡng, {so_la_test} kiểm tra")
     C.luu_hinh("2_chia_train_test.png")
 
     print("\n2.5 Lưu")

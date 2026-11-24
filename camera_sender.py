@@ -1,3 +1,7 @@
+"""
+Gửi khung hình webcam từ máy Windows sang Flask server trên Jetson Orin (/upload_frame).
+Chạy: python camera_sender.py --orin-ip <IP_ORIN>
+"""
 import argparse
 import os
 import cv2
@@ -151,13 +155,11 @@ def main():
     print("Phim: 'c' = bat/tat camera | 'q' hoac ESC = thoat | Ctrl+C = thoat")
     print("Hoac bam nut X cua cua so de thoat.")
 
-    window_shown = False
     try:
         while not stop_event.is_set():
             with lock:
                 frame = latest_frame
             cv2.imshow(WIN, frame if frame is not None else off_screen)
-            window_shown = True
 
             key = cv2.waitKey(30) & 0xFF
             if key in (ord("q"), ord("Q"), 27):      # q hoac ESC

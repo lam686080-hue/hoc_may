@@ -6,7 +6,7 @@
  Làm gì   : Camera -> tìm các khuôn mặt -> căn chỉnh + tiền xử lý GIỐNG HỆT
             bước 1 -> hồi quy logistic (HOG + PCA, bước 5) cho xác suất -> hiện tên / "Nguoi la"
             -> nhận ổn định 1,5 giây thì ghi điểm danh. Chạy trên laptop hoặc Jetson, xem qua web.
- Đầu vào  : mo_hinh/mo_hinh_tot_nhat.joblib (bước 5), camera đã chọn trong thu_anh.py
+ Đầu vào  : mo_hinh/hoi_quy_logistic.joblib (bước 5 đã cập nhật ngưỡng), camera đã chọn trong thu_anh.py
  Đầu ra   : hình nhận diện (cửa sổ, web MJPEG hoặc gửi sang Flask server), file diem_danh.csv
  Các bước : 6.1 Nạp mô hình
             6.2 Kết nối camera (luồng đọc riêng, tự kết nối lại khi mất tín hiệu)
@@ -16,7 +16,7 @@
             6.6 Vẽ kết quả, hiển thị ra cửa sổ, trang web hoặc gửi tới Flask server
  Chạy     : python buoc6_nhan_dien.py                      (laptop, hiện cửa sổ – bấm q để thoát)
             python3 buoc6_nhan_dien.py --web               (xem qua cổng 5000 khi chạy trực tiếp trên Orin)
-            python3 buoc6_nhan_dien.py --server <URL>      (gửi khung hình + JSON sang Flask server)
+            python3 buoc6_nhan_dien.py --server <URL>      (gửi khung hình + JSON sang server.py --relay)
  Cần cùng thư mục: chung.py, thu_anh.py (hàm camera + căn chỉnh mặt), face_landmarker.task
 =====================================================================
 """
@@ -57,12 +57,14 @@ FILE_DIEM_DANH = os.path.join(C.THU_MUC, "diem_danh.csv")
 class NhanDien:
     # ---------------------- 6.1 NẠP MÔ HÌNH ----------------------
     def __init__(self):
-        if not os.path.exists(C.FILE_MO_HINH_TOT):
-            raise SystemExit("Chưa có mo_hinh/mo_hinh_tot_nhat.joblib. Chạy bước 1 -> 5 trước.")
-        goi = joblib.load(C.FILE_MO_HINH_TOT)           # hồi quy logistic do bước 5 lưu
+        if not os.path.exists(C.FILE_HOI_QUY_LOGISTIC):
+            raise SystemExit("Chưa có mo_hinh/hoi_quy_logistic.joblib. Chạy bước 1 -> 5 trước.")
+        goi = joblib.load(C.FILE_HOI_QUY_LOGISTIC)      # hồi quy logistic đã cập nhật ngưỡng ở bước 5
         self.mo_hinh = goi["mo_hinh"]
         if not isinstance(getattr(self.mo_hinh, "named_steps", {}).get("model"), LogisticRegression):
             raise SystemExit("File mô hình cũ. Chạy lại các bước 3, 4 và 5 để lưu hồi quy logistic.")
+        if NGUONG_NGUOI_LA is None and "nguong_nguoi_la" not in goi:
+            raise SystemExit("Mô hình chưa có ngưỡng người lạ. Chạy buoc5_danh_gia.py trước.")
         self.lop = list(self.mo_hinh.classes_)          # danh sách người, đúng thứ tự cột xác suất
         # ngưỡng người lạ: dùng ngưỡng bước 5 (FAR và FRR gần nhau nhất), trừ khi đặt tay ở phần cấu hình
         self.nguong = goi["nguong_nguoi_la"] if NGUONG_NGUOI_LA is None else NGUONG_NGUOI_LA
@@ -231,40 +233,37 @@ class GuiServer:
         ok, buf = cv2.imencode(".jpg", anh, [cv2.IMWRITE_JPEG_QUALITY, 80])
         if not ok:
             return
-        if cac_mat:
-            m = max(cac_mat, key=lambda x: float(x["xs"].max()) if x.get("xs") is not None else 0.0)
+        hien_tai = [m for m in cac_mat if m.get("tu_luc") is not None]
+        ung_vien = [m for m in hien_tai if m.get("xs") is not None]
+        if ung_vien:
+            m = max(ung_vien, key=lambda x: float(x["xs"].max()))
             ten = m.get("ten", "Nguoi la")
-            conf = round(float(m["xs"].max()), 4) if m.get("xs") is not None else 0.0
+            conf = round(float(m["xs"].max()), 4)
         else:
-            ten, conf = "Khong co khuon mat", 0.0
-        payload = {"name": ten, "confidence": conf, "count": len(cac_mat)}
+            ten = "?" if hien_tai else "Khong co khuon mat"
+            conf = None
+        payload = {"name": ten, "confidence": conf, "count": len(hien_tai)}
         with self._khoa:
             self._jpg = buf.tobytes()
             self._data = json.dumps(payload).encode("utf-8")
+
+    def _post(self, path, body, ctype):
+        try:
+            req = urllib.request.Request(f"{self.url}{path}", data=body,
+                                         headers={"Content-Type": ctype}, method="POST")
+            urllib.request.urlopen(req, timeout=1.5).close()
+        except Exception:
+            pass
 
     def _vong_gui(self):
         while self._chay:
             with self._khoa:
                 jpg, data = self._jpg, self._data
-                self._jpg, self._data = None, None
+                self._jpg = self._data = None
             if jpg is not None:
-                try:
-                    req = urllib.request.Request(
-                        f"{self.url}/upload_frame", data=jpg,
-                        headers={"Content-Type": "image/jpeg"}, method="POST"
-                    )
-                    urllib.request.urlopen(req, timeout=1.5).close()
-                except Exception:
-                    pass
+                self._post("/upload_frame", jpg, "image/jpeg")
             if data is not None:
-                try:
-                    req = urllib.request.Request(
-                        f"{self.url}/receive", data=data,
-                        headers={"Content-Type": "application/json"}, method="POST"
-                    )
-                    urllib.request.urlopen(req, timeout=1.5).close()
-                except Exception:
-                    pass
+                self._post("/receive", data, "application/json")
             time.sleep(0.08)
 
     def dong(self):
@@ -356,7 +355,7 @@ def main():
                     ts = max(int((time.perf_counter() - t0) * 1000), ts + 1)
                     hien, cac_mat = xu_ly_khung(frame, xoay, nd, lm, ts, fps)
                     if gui is not None:
-                       gui.cap_nhat(hien, cac_mat)
+                        gui.cap_nhat(hien, cac_mat)
                 except Exception as e:
                     so_loi += 1
                     if so_loi <= 5:                     # chỉ in vài lỗi đầu cho đỡ rối màn hình

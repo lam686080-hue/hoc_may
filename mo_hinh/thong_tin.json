@@ -3,6 +3,7 @@
   "Tham số": "{'C': 1}",
   "Độ chính xác test (%)": "100.0",
   "Số thành phần PCA": "124",
+  "Tốc độ dự đoán batch / đơn lẻ (ms/ảnh)": "0.217 / 0.726",
   "Ngưỡng người lạ": "0.82",
   "Cách chọn ngưỡng": "Cân bằng FAR/FRR",
   "Ảnh lạ dùng chọn ngưỡng": "150",

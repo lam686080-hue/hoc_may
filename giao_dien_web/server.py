@@ -1,4 +1,9 @@
-
+"""
+Flask server hiển thị luồng camera trực tiếp và kết quả nhận diện AI.
+Chạy:
+  python3 giao_dien_web/server.py          (mặc định: nhận khung hình từ camera_sender.py và tự nhận diện trên Orin)
+  python3 giao_dien_web/server.py --relay  (chỉ phát lại khung hình + JSON do buoc6_nhan_dien.py --server gửi sang)
+"""
 from flask import Flask, request, jsonify, Response, render_template
 from datetime import datetime
 import argparse

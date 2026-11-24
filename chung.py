@@ -8,15 +8,12 @@
      (camera thật) – bài giảng: dữ liệu mới phải xử lý như tập train.
    - Hình vẽ cùng một kiểu, lưu vào thư mục ket_qua/.
 
- Nguồn ảnh (cột "nguon" trong danh_sach.csv):
-   tu_thu   : ảnh nhóm tự thu bằng thu_anh.py      dataset/mat_xam_100/<Tên>/
-
  Dữ liệu đi qua các bước:
    Bước 1 -> dataset/du_lieu_anh.npz + dataset/danh_sach.csv
-   Bước 2 -> dataset/danh_sach.csv (thêm cột "tap": train / test / nguoi_la)
-   Bước 3 -> mo_hinh/hoi_quy_logistic.joblib + ket_qua/3_ket_qua_cv.csv
-   Bước 4 -> ket_qua/du_doan.npz + ket_qua/4_du_doan_tap_test.csv
-   Bước 5 -> mo_hinh/mo_hinh_tot_nhat.joblib + ket_qua/xem_ket_qua.html
+   Bước 2 -> dataset/danh_sach.csv (thêm cột "tap": train / test)
+   Bước 3 -> mo_hinh/hoi_quy_logistic.joblib + ket_qua/3_ket_qua_cv.csv + ket_qua/3_*.png
+   Bước 4 -> ket_qua/du_doan.npz + ket_qua/4_du_doan_tap_test.csv + ket_qua/4_*.png
+   Bước 5 -> cập nhật ngưỡng người lạ vào mo_hinh/hoi_quy_logistic.joblib + mo_hinh/thong_tin.json + ket_qua/xem_ket_qua.html
    Bước 6 -> nhận diện qua camera, ghi diem_danh.csv
 =====================================================================
 """
@@ -42,10 +39,9 @@ MO_HINH = os.path.join(THU_MUC, "mo_hinh")                    # mô hình đã h
 
 FILE_ANH = os.path.join(DATASET, "du_lieu_anh.npz")                  # bước 1 -> 3, 4, 5
 FILE_DANH_SACH = os.path.join(DATASET, "danh_sach.csv")              # bước 1, 2 -> 3, 4, 5
-FILE_HOI_QUY_LOGISTIC = os.path.join(MO_HINH, "hoi_quy_logistic.joblib")       # bước 3 -> 4, 5
-FILE_KET_QUA_CV = os.path.join(KET_QUA, "3_ket_qua_cv.csv")          # bước 3 -> 5
-FILE_DU_DOAN = os.path.join(KET_QUA, "du_doan.npz")                  # bước 4 -> 5
-FILE_MO_HINH_TOT = os.path.join(MO_HINH, "mo_hinh_tot_nhat.joblib")  # bước 5 -> 6
+FILE_HOI_QUY_LOGISTIC = os.path.join(MO_HINH, "hoi_quy_logistic.joblib")  # bước 3 lưu -> bước 4 đọc -> bước 5 thêm ngưỡng -> bước 6 dùng
+FILE_KET_QUA_CV = os.path.join(KET_QUA, "3_ket_qua_cv.csv")               # bước 3 -> 5
+FILE_DU_DOAN = os.path.join(KET_QUA, "du_doan.npz")                       # bước 4 -> 5
 
 # ============================ THAM SỐ CHUNG ============================
 KICH_THUOC = 100          # ảnh mặt xám 100x100 -> vector 10.000 chiều
@@ -55,9 +51,6 @@ CLAHE_LUOI = 8            # CLAHE chia ảnh thành lưới 8 x 8 ô
 RANDOM_STATE = 42         # cố định yếu tố ngẫu nhiên -> chạy lại ra cùng kết quả
 TEN_TU_THE = {"thang": "Nhìn thẳng", "trai": "Quay trái", "phai": "Quay phải",
               "len": "Ngẩng lên", "xuong": "Cúi xuống"}
-# Nguồn ảnh: tên hiển thị + màu dùng chung cho mọi biểu đồ
-NGUON = {"tu_thu": ("Tự thu (thu_anh.py)", "darkorange")}
-TRONG_LOP = ("tu_thu",)   # người trong lớp: được hiện tên + điểm danh ở bước 6
 
 _clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP, tileGridSize=(CLAHE_LUOI, CLAHE_LUOI))
 plt.rcParams["font.family"] = "DejaVu Sans"       # font có đủ dấu tiếng Việt
@@ -109,9 +102,17 @@ def doc_du_lieu():
     df = pd.read_csv(FILE_DANH_SACH, dtype={"file": str, "ten": str, "tu_the": str}).fillna("")
     if len(df) != len(anh):
         raise SystemExit("dataset/danh_sach.csv không khớp du_lieu_anh.npz. Chạy lại từ bước 1.")
-    if not df["nguon"].isin(NGUON).all():
-        raise SystemExit("Dữ liệu có nguồn không còn được sử dụng. Chạy lại từ bước 1.")
     return vector_hoa(anh), df
+
+
+def doc_nguoi_la(nhom):
+    """Đọc 1 bộ ảnh người lạ ('nguoi_la_chon_nguong' hoặc 'nguoi_la') từ dataset/du_lieu_anh.npz."""
+    with np.load(FILE_ANH) as data:
+        if nhom not in data:
+            return np.empty((0, KICH_THUOC * KICH_THUOC), np.float32), np.array([], dtype=str), np.array([], dtype=str)
+        mat = data[nhom]
+        X = vector_hoa(mat) if len(mat) else np.empty((0, KICH_THUOC * KICH_THUOC), np.float32)
+        return X, data[nhom + "_file"], data[nhom + "_status"]
 
 
 def doc_anh_xam(duong_dan):
@@ -121,13 +122,6 @@ def doc_anh_xam(duong_dan):
         return cv2.imdecode(du_lieu, cv2.IMREAD_GRAYSCALE) if du_lieu.size else None
     except (OSError, cv2.error):
         return None
-
-
-def luu_png(duong_dan, anh):
-    os.makedirs(os.path.dirname(duong_dan), exist_ok=True)
-    ok, buf = cv2.imencode(".png", anh)
-    if ok:
-        buf.tofile(duong_dan)
 
 
 # ============================ VẼ HÌNH ============================
@@ -142,7 +136,7 @@ def luu_hinh(ten):
 
 
 def rut_gon(ten):
-    """'Gerhard_Schroeder' -> 'G. Schroeder' (tên ngắn để ghi lên hình)."""
+    """'Nguyen_Trong_Thuy' -> 'N. T. Thuy' (tên ngắn để ghi lên hình)."""
     ten = str(ten)
     if len(ten) <= 15:
         return ten.replace("_", " ")
@@ -153,13 +147,13 @@ def rut_gon(ten):
 def ve_luoi_anh(X, dong1, dong2, dung, ten_file, tieu_de, cot=8):
     """Vẽ lưới ảnh mặt. Mỗi ảnh có 2 dòng chữ; dung[i] = True -> khung xanh, False -> khung đỏ."""
     hang = int(np.ceil(len(X) / cot))
-    fig, ax = plt.subplots(hang, cot, figsize=(1.75 * cot, 2.2 * hang), squeeze=False)
+    fig, ax = plt.subplots(hang, cot, figsize=(1.8 * cot, 2.55 * hang), squeeze=False)
     for a in ax.ravel():
         a.axis("off")
     for a, x, d1, d2, ok in zip(ax.ravel(), X, dong1, dong2, dung):
         a.imshow(np.asarray(x).reshape(KICH_THUOC, KICH_THUOC), cmap="gray", vmin=0, vmax=255)
         a.add_patch(plt.Rectangle((0, 0), KICH_THUOC - 1, KICH_THUOC - 1, fill=False, lw=3,
                                   ec="limegreen" if ok else "red"))
-        a.set_title(f"{d1}\n{d2}", fontsize=7.5, color="green" if ok else "red")
-    plt.suptitle(tieu_de)
+        a.set_title(f"{d1}\n{d2}", fontsize=7.5, pad=4, color="green" if ok else "red")
+    plt.suptitle(tieu_de, y=1.01)
     luu_hinh(ten_file)

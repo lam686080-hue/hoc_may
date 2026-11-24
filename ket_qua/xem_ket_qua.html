@@ -1,4 +1,4 @@
-<html><head><meta charset='utf-8'><title>Kết quả nhận diện khuôn mặt</title></head><body style='font-family:Arial;max-width:1200px;margin:auto'><h1>Kết quả</h1><p><b>Mô hình:</b> Logistic Regression<br><b>Tham số:</b> {'C': 1}<br><b>Độ chính xác test (%):</b> 100.0<br><b>Số thành phần PCA:</b> 124<br><b>Ngưỡng người lạ:</b> 0.82<br><b>Cách chọn ngưỡng:</b> Cân bằng FAR/FRR<br><b>Ảnh lạ dùng chọn ngưỡng:</b> 150<br><b>Ảnh lạ kiểm tra bị nhận nhầm:</b> 0/14<br><b>Ảnh quen kiểm tra nhận đúng sau ngưỡng:</b> 60/60<br><b>FAR / FRR trên ảnh dùng chọn ngưỡng (%):</b> 2.0 / 1.7<br><b>Người được điểm danh (trong lớp):</b> Bui_Anh_Tuan, Bui_Trung_Hieu, Hoang_Le_Hai, Hoang_Tuan_Hung, Le_Thanh_Cao, Ly_The_Anh, Mai_Manh_Hung, Nguyen_Hoang_Anh, Nguyen_Trong_Thuy, Nguyen_Trung_Dung, Nguyen_Van_Lam, Tong_Van_Dung, Vu_Duy_Anh, Vu_Van_Dai, Vu_Viet_Bao</p>
+<!DOCTYPE html><html lang='vi'><head><meta charset='utf-8'><title>Kết quả nhận diện khuôn mặt</title><style>body{font-family:Arial,sans-serif;max-width:1200px;margin:20px auto;padding:0 16px;line-height:1.5}table{border-collapse:collapse;margin:12px 0;font-size:14px}th,td{border:1px solid #ccc;padding:6px 10px}th{background:#f3f6fa}pre{background:#f7f9fb;border:1px solid #ddd;padding:12px;overflow-x:auto}h2{margin-top:28px;border-bottom:1px solid #ddd;padding-bottom:4px}</style></head><body><h1>Kết quả đánh giá hệ thống nhận diện khuôn mặt</h1><p><b>Mô hình:</b> Logistic Regression<br><b>Tham số:</b> {&#x27;C&#x27;: 1}<br><b>Độ chính xác test (%):</b> 100.0<br><b>Số thành phần PCA:</b> 124<br><b>Tốc độ dự đoán batch / đơn lẻ (ms/ảnh):</b> 0.217 / 0.726<br><b>Ngưỡng người lạ:</b> 0.82<br><b>Cách chọn ngưỡng:</b> Cân bằng FAR/FRR<br><b>Ảnh lạ dùng chọn ngưỡng:</b> 150<br><b>Ảnh lạ kiểm tra bị nhận nhầm:</b> 0/14<br><b>Ảnh quen kiểm tra nhận đúng sau ngưỡng:</b> 60/60<br><b>FAR / FRR trên ảnh dùng chọn ngưỡng (%):</b> 2.0 / 1.7<br><b>Người được điểm danh (trong lớp):</b> Bui_Anh_Tuan, Bui_Trung_Hieu, Hoang_Le_Hai, Hoang_Tuan_Hung, Le_Thanh_Cao, Ly_The_Anh, Mai_Manh_Hung, Nguyen_Hoang_Anh, Nguyen_Trong_Thuy, Nguyen_Trung_Dung, Nguyen_Van_Lam, Tong_Van_Dung, Vu_Duy_Anh, Vu_Van_Dai, Vu_Viet_Bao</p>
 <table border="1" class="dataframe">
   <thead>
     <tr style="text-align: right;">
@@ -9,7 +9,8 @@
       <th>precision</th>
       <th>recall</th>
       <th>f1</th>
-      <th>ms_moi_anh</th>
+      <th>ms_batch</th>
+      <th>ms_don_le</th>
     </tr>
   </thead>
   <tbody>
@@ -21,30 +22,153 @@
       <td>1.0</td>
       <td>1.0</td>
       <td>1.0</td>
-      <td>0.179</td>
+      <td>0.217</td>
+      <td>0.726</td>
     </tr>
   </tbody>
 </table>
 <h2>Bước 1 – Chuẩn bị dữ liệu (Thành viên 1 – Bùi Trung Hiếu)</h2>
-<p><b>1_anh_mau.png</b><br><img src='1_anh_mau.png' style='max-width:100%'>
-<p><b>1_can_bang_sang.png</b><br><img src='1_can_bang_sang.png' style='max-width:100%'>
-<p><b>1_so_anh_moi_nguoi.png</b><br><img src='1_so_anh_moi_nguoi.png' style='max-width:100%'>
+<p><b>1_anh_mau.png</b><br><img src='1_anh_mau.png' style='max-width:100%'></p>
+<p><b>1_can_bang_sang.png</b><br><img src='1_can_bang_sang.png' style='max-width:100%'></p>
+<p><b>1_so_anh_moi_nguoi.png</b><br><img src='1_so_anh_moi_nguoi.png' style='max-width:100%'></p>
 <h2>Bước 2 – Chia train/test (Thành viên 2 – Nguyễn Văn Lâm)</h2>
-<p><b>2_chia_train_test.png</b><br><img src='2_chia_train_test.png' style='max-width:100%'>
+<p><b>2_chia_train_test.png</b><br><img src='2_chia_train_test.png' style='max-width:100%'></p>
 <h2>Bước 3.2 – Phân tích PCA (Thành viên 1 – Bùi Trung Hiếu)</h2>
-<p><b>3_eigenfaces.png</b><br><img src='3_eigenfaces.png' style='max-width:100%'>
-<p><b>3_khoi_phuc_pca.png</b><br><img src='3_khoi_phuc_pca.png' style='max-width:100%'>
-<p><b>3_pca_phuong_sai.png</b><br><img src='3_pca_phuong_sai.png' style='max-width:100%'>
-<p><b>3_truoc_sau_pca.png</b><br><img src='3_truoc_sau_pca.png' style='max-width:100%'>
+<p><b>3_eigenfaces.png</b><br><img src='3_eigenfaces.png' style='max-width:100%'></p>
+<p><b>3_khoi_phuc_pca.png</b><br><img src='3_khoi_phuc_pca.png' style='max-width:100%'></p>
+<p><b>3_pca_phuong_sai.png</b><br><img src='3_pca_phuong_sai.png' style='max-width:100%'></p>
+<p><b>3_truoc_sau_pca.png</b><br><img src='3_truoc_sau_pca.png' style='max-width:100%'></p>
 <h2>Bước 3.3 – 3.5 – Huấn luyện hồi quy logistic (Thành viên 2 – Nguyễn Văn Lâm)</h2>
+<p><b>3_chon_tham_so_C.png</b><br><img src='3_chon_tham_so_C.png' style='max-width:100%'></p>
 <h2>Bước 4 – Dự đoán (Thành viên 2 – Nguyễn Văn Lâm)</h2>
-<p><b>4_du_doan_tap_test.png</b><br><img src='4_du_doan_tap_test.png' style='max-width:100%'>
-<p><b>4_xac_suat_du_doan.png</b><br><img src='4_xac_suat_du_doan.png' style='max-width:100%'>
+<p><b>4_du_doan_tap_test.png</b><br><img src='4_du_doan_tap_test.png' style='max-width:100%'></p>
+<p><b>4_xac_suat_du_doan.png</b><br><img src='4_xac_suat_du_doan.png' style='max-width:100%'></p>
 <h2>Bước 5 – Đánh giá (Thành viên 3 – Lê Thanh Cao)</h2>
-<p><b>5_danh_gia_logistic.png</b><br><img src='5_danh_gia_logistic.png' style='max-width:100%'>
-<p><b>5_ma_tran_nham_lan_tot_nhat.png</b><br><img src='5_ma_tran_nham_lan_tot_nhat.png' style='max-width:100%'>
-<p><b>5_nguoi_la.png</b><br><img src='5_nguoi_la.png' style='max-width:100%'>
-<p><b>5_nguoi_la_anh.png</b><br><img src='5_nguoi_la_anh.png' style='max-width:100%'>
-<p><b>5_roc_tot_nhat.png</b><br><img src='5_roc_tot_nhat.png' style='max-width:100%'>
-<p><b>5_theo_nguon_anh.png</b><br><img src='5_theo_nguon_anh.png' style='max-width:100%'>
-<p><b>5_theo_tu_the.png</b><br><img src='5_theo_tu_the.png' style='max-width:100%'></body></html>
+<p><b>5_danh_gia_logistic.png</b><br><img src='5_danh_gia_logistic.png' style='max-width:100%'></p>
+<p><b>5_ma_tran_nham_lan.png</b><br><img src='5_ma_tran_nham_lan.png' style='max-width:100%'></p>
+<p><b>5_nguoi_la.png</b><br><img src='5_nguoi_la.png' style='max-width:100%'></p>
+<p><b>5_nguoi_la_anh.png</b><br><img src='5_nguoi_la_anh.png' style='max-width:100%'></p>
+<p><b>5_nguoi_la_kiem_tra.png</b><br><img src='5_nguoi_la_kiem_tra.png' style='max-width:100%'></p>
+<p><b>5_roc_auc.png</b><br><img src='5_roc_auc.png' style='max-width:100%'></p>
+<p><b>5_theo_tu_the.png</b><br><img src='5_theo_tu_the.png' style='max-width:100%'></p>
+<h3>Báo cáo phân loại chi tiết từng người (5_bao_cao_phan_loai.txt)</h3>
+<pre>                   precision    recall  f1-score   support
+
+     Bui_Anh_Tuan       1.00      1.00      1.00         8
+   Bui_Trung_Hieu       1.00      1.00      1.00         8
+     Hoang_Le_Hai       1.00      1.00      1.00         8
+  Hoang_Tuan_Hung       1.00      1.00      1.00         8
+     Le_Thanh_Cao       1.00      1.00      1.00         8
+       Ly_The_Anh       1.00      1.00      1.00         8
+    Mai_Manh_Hung       1.00      1.00      1.00         8
+ Nguyen_Hoang_Anh       1.00      1.00      1.00         8
+Nguyen_Trong_Thuy       1.00      1.00      1.00         8
+Nguyen_Trung_Dung       1.00      1.00      1.00         8
+   Nguyen_Van_Lam       1.00      1.00      1.00         8
+    Tong_Van_Dung       1.00      1.00      1.00         8
+       Vu_Duy_Anh       1.00      1.00      1.00         7
+       Vu_Van_Dai       1.00      1.00      1.00         8
+      Vu_Viet_Bao       1.00      1.00      1.00         8
+
+         accuracy                           1.00       119
+        macro avg       1.00      1.00      1.00       119
+     weighted avg       1.00      1.00      1.00       119
+</pre>
+<h3>Bảng kiểm tra độc lập ảnh người lạ (test_nguoi_la.csv)</h3>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>file</th>
+      <th>trang_thai</th>
+      <th>du_doan</th>
+      <th>xac_suat_cao_nhat</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>nguoi_la_001.jpg</td>
+      <td>tu_choi_dung</td>
+      <td>Nguoi la</td>
+      <td>0.4820</td>
+    </tr>
+    <tr>
+      <td>nguoi_la_002.jpg</td>
+      <td>tu_choi_dung</td>
+      <td>Nguoi la</td>
+      <td>0.3611</td>
+    </tr>
+    <tr>
+      <td>nguoi_la_003.jpg</td>
+      <td>tu_choi_dung</td>
+      <td>Nguoi la</td>
+      <td>0.3839</td>
+    </tr>
+    <tr>
+      <td>nguoi_la_004.jpg</td>
+      <td>tu_choi_dung</td>
+      <td>Nguoi la</td>
+      <td>0.3488</td>
+    </tr>
+    <tr>
+      <td>nguoi_la_005.jpg</td>
+      <td>tu_choi_dung</td>
+      <td>Nguoi la</td>
+      <td>0.3426</td>
+    </tr>
+    <tr>
+      <td>nguoi_la_006.jpg</td>
+      <td>tu_choi_dung</td>
+      <td>Nguoi la</td>
+      <td>0.2385</td>
+    </tr>
+    <tr>
+      <td>nguoi_la_007.jpg</td>
+      <td>tu_choi_dung</td>
+      <td>Nguoi la</td>
+      <td>0.5680</td>
+    </tr>
+    <tr>
+      <td>nguoi_la_008.jpg</td>
+      <td>tu_choi_dung</td>
+      <td>Nguoi la</td>
+      <td>0.6288</td>
+    </tr>
+    <tr>
+      <td>nguoi_la_009.jpg</td>
+      <td>tu_choi_dung</td>
+      <td>Nguoi la</td>
+      <td>0.4902</td>
+    </tr>
+    <tr>
+      <td>nguoi_la_010.jpg</td>
+      <td>tu_choi_dung</td>
+      <td>Nguoi la</td>
+      <td>0.3280</td>
+    </tr>
+    <tr>
+      <td>nguoi_la_011.jpg</td>
+      <td>tu_choi_dung</td>
+      <td>Nguoi la</td>
+      <td>0.3062</td>
+    </tr>
+    <tr>
+      <td>nguoi_la_012.jpg</td>
+      <td>tu_choi_dung</td>
+      <td>Nguoi la</td>
+      <td>0.3081</td>
+    </tr>
+    <tr>
+      <td>nguoi_la_013.jpg</td>
+      <td>tu_choi_dung</td>
+      <td>Nguoi la</td>
+      <td>0.3842</td>
+    </tr>
+    <tr>
+      <td>nguoi_la_014.jpg</td>
+      <td>tu_choi_dung</td>
+      <td>Nguoi la</td>
+      <td>0.3987</td>
+    </tr>
+  </tbody>
+</table>
+</body></html>
